@@ -61,7 +61,7 @@ const UserComponent = () => {
   const [signup, { loading: signupLoading }] = useMutation(SIGNUP_MUTATION, {
     onCompleted: () => {
       setSignupSuccess('Account created successfully! Please login.');
-      setSignupForm({ userName: '', email: '', password: '', confirmPassword: '', role: 'resident' });
+      setSignupForm({ userName: '', email: '', password: '', confirmPassword: '', role: 'patient' });
       setActiveTab('login');
     },
     onError: (error) => {
@@ -195,9 +195,8 @@ const UserComponent = () => {
                         value={signupForm.role}
                         onChange={(e) => setSignupForm({ ...signupForm, role: e.target.value })}
                       >
-                        <option value="resident">Resident</option>
-                        <option value='business_owner'>Business Owner</option>
-                        <option value='community_organizer'>Community Organizer</option>
+                        <option value='PATIENT'>Patient</option>
+                        <option value='NURSE'>Nurse</option>
                       </Form.Select>
                     </Form.Group>
 

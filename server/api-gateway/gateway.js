@@ -50,7 +50,8 @@ async function startApolloServer() {
         supergraphSdl: new IntrospectAndCompose({
             subgraphs: [
                 { name: "users", url: "http://localhost:4001/graphql" },
-                { name: 'community', url: 'http://localhost:4002/graphql' }
+                { name: 'patients', url: 'http://localhost:4002/graphql' },
+                { name: 'nurses', url: 'http://localhost:4003/graphql' }
             ],
             // Optional: set interval for polling subgraphs for schema updates
             // pollIntervalInMs: 10000, 
