@@ -6,7 +6,7 @@ import { ApolloClient, InMemoryCache, createHttpLink, ApolloProvider } from '@ap
 import { setContext } from '@apollo/client/link/context';
 
 const httpLink = createHttpLink({
-  uri: 'http://localhost:4000/graphql', // Adjust to your auth-microservice GraphQL endpoint
+  uri: 'http://localhost:4000/graphql', 
 });
 
 // Auth link for adding the token to headers

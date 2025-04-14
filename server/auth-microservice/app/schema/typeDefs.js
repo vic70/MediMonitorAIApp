@@ -1,11 +1,16 @@
 import gql from 'graphql-tag';
 const typeDefs = gql`
+    enum Role {
+        NURSE
+        PATIENT
+    }
+
     type User @key(fields: "id") {
         id: ID!
         userName: String!
         email: String!
         password: String!
-        role: String!
+        role: Role!
     }
 
     type AuthPayload {

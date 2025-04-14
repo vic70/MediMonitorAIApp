@@ -7,25 +7,10 @@ const JWT_SECRET = config.jwtSecret;
 const userResolvers = {
     User: {
         async __resolveReference(userRef) {
-            console.log(`[Auth Service] Resolving reference for User ID: ${userRef.id}`);
             try {
                 const resolvedUser = await User.findById(userRef.id);
-                if (!resolvedUser) {
-                    console.error(`[Auth Service] __resolveReference: User not found for ID: ${userRef.id}`);
-                    // Returning null here will likely cause the non-nullable error downstream 
-                    // if the schema expects a full User.
-                    // Depending on requirements, you might throw an error instead.
-                    return null;
-                }
-                console.log(`[Auth Service] __resolveReference: Found user:`, JSON.stringify(resolvedUser));
-                // Ensure the returned object actually has userName
-                if (!resolvedUser.userName) {
-                    console.error(`[Auth Service] __resolveReference: User found but userName is missing for ID: ${userRef.id}`);
-                }
                 return resolvedUser;
             } catch (error) {
-                console.error(`[Auth Service] Error in __resolveReference for ID ${userRef.id}:`, error);
-                // Rethrow or handle as appropriate
                 throw error;
             }
         },
@@ -64,8 +49,8 @@ const userResolvers = {
             try {
                 const decoded = jwt.verify(token, JWT_SECRET);
 
-                // Check if the user exists and is an admin
-                if (!decoded || decoded.role !== 'community_organizer') {
+                // Check if the user exists and is a nurse (only nurses can see lists of users)
+                if (!decoded || decoded.role !== 'NURSE') {
                     console.log(`[Auth Service] Access denied for users query. User role: ${decoded?.role}`);
                     return [];
                 }
@@ -81,6 +66,12 @@ const userResolvers = {
 
     Mutation: {
         signup: async (_, { userName, email, password, role }) => {
+            // Validate role
+            const validRoles = ['NURSE', 'PATIENT'];
+            if (role && !validRoles.includes(role)) {
+                throw new Error(`Invalid role. Must be one of: ${validRoles.join(', ')}`);
+            }
+
             const newUser = new User({ userName, email, password, role });
             return await newUser.save();
         },
@@ -108,7 +99,6 @@ const userResolvers = {
             return 'Logged out successfully!';
         }
     }
-
 }
 
 export default userResolvers;
