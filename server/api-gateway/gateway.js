@@ -96,7 +96,7 @@ async function startApolloServer() {
     app.use(
         '/graphql', // Or your desired endpoint
         cors({
-            origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://localhost:4000', 'http://localhost:4001', 'http://localhost:4002'],
+            origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://localhost:3003', 'http://localhost:4000', 'http://localhost:4001', 'http://localhost:4002', 'http://localhost:4003'],
             credentials: true
         }), // Use cors middleware
         express.json(), // Use express.json middleware for body parsing

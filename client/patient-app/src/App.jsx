@@ -1,4 +1,4 @@
-import { ApolloClient, InMemoryCache, createHttpLink, ApolloProvider } from '@apollo/client';
+import { ApolloClient, InMemoryCache, createHttpLink, ApolloProvider, gql, useMutation } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
@@ -9,6 +9,8 @@ import EmergencyAlert from './pages/EmergencyAlert';
 import DailyRecords from './pages/DailyRecords';
 import SymptomsList from './pages/SymptomsList';
 import MotivationalTips from './pages/MotivationalTips';
+import Profile from './pages/Profile';
+import Appointments from './pages/Appointments';
 import Navbar from './components/Navbar';
 
 const httpLink = createHttpLink({
@@ -34,13 +36,47 @@ const client = new ApolloClient({
   cache: new InMemoryCache(),
 });
 
+// Initialize patient data mutation
+const INITIALIZE_PATIENT_DATA = gql`
+  mutation InitializePatientData {
+    initializePatientData {
+      id
+      userId
+    }
+  }
+`;
+
 function App() {
   const [authenticated, setAuthenticated] = useState(false);
+  const [initializing, setInitializing] = useState(true);
+  
+  // Initialize patient data
+  const [initializePatientData] = useMutation(INITIALIZE_PATIENT_DATA, {
+    onCompleted: (data) => {
+      console.log('Patient data initialized:', data);
+      setInitializing(false);
+    },
+    onError: (error) => {
+      console.error('Error initializing patient data:', error);
+      setInitializing(false);
+    }
+  });
 
   useEffect(() => {
     const token = localStorage.getItem('authToken');
     setAuthenticated(!!token);
-  }, []);
+    
+    // If authenticated, initialize patient data
+    if (token) {
+      initializePatientData();
+    } else {
+      setInitializing(false);
+    }
+  }, [initializePatientData]);
+
+  if (initializing && authenticated) {
+    return <div className="d-flex justify-content-center align-items-center vh-100">Initializing...</div>;
+  }
 
   return (
     <ApolloProvider client={client}>
@@ -54,6 +90,8 @@ function App() {
               <Route path="/daily-records" element={authenticated ? <DailyRecords /> : <Navigate to="/login" />} />
               <Route path="/symptoms" element={authenticated ? <SymptomsList /> : <Navigate to="/login" />} />
               <Route path="/motivational-tips" element={authenticated ? <MotivationalTips /> : <Navigate to="/login" />} />
+              <Route path="/profile" element={authenticated ? <Profile /> : <Navigate to="/login" />} />
+              <Route path="/appointments" element={authenticated ? <Appointments /> : <Navigate to="/login" />} />
               <Route path="/login" element={<Navigate to="/" />} />
             </Routes>
           </div>

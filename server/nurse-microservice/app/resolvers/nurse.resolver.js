@@ -1,4 +1,4 @@
-import Nurse from '../models/nurse.model.js';
+import NurseData from '../models/nurse.model.js';
 import { GraphQLError } from 'graphql';
 
 // Helper function to convert MongoDB ObjectId to String ID
@@ -10,8 +10,8 @@ const formatId = (obj) => {
     };
 };
 
-// Helper to ensure user is authenticated
-const ensureAuthenticated = (user) => {
+// Helper to ensure user is authenticated and has nurse role
+const ensureNurseAuthenticated = (user) => {
     if (!user) {
         throw new GraphQLError('Not authenticated', {
             extensions: {
@@ -19,191 +19,208 @@ const ensureAuthenticated = (user) => {
             }
         });
     }
+
+    if (user.role !== 'NURSE') {
+        throw new GraphQLError('Not authorized - requires nurse role', {
+            extensions: {
+                code: 'FORBIDDEN'
+            }
+        });
+    }
 };
 
 const nurseResolvers = {
-    Nurse: {
-        __resolveReference: async (reference) => {
-            const { id } = reference;
-            const nurse = await Nurse.findById(id);
-            return formatId(nurse);
-        },
-        motivationalTips: (nurse) => {
-            return nurse.motivationalTips.map(tip => ({
-                ...tip._doc,
-                id: tip._id.toString()
-            }));
-        }
-    },
-
     Query: {
-        nurses: async (_, __, { user }) => {
-            ensureAuthenticated(user);
-            if (user.role !== 'NURSE') {
-                throw new GraphQLError('Not authorized to view all nurses');
-            }
-
-            const nurses = await Nurse.find({});
-            return nurses.map(formatId);
-        },
-
-        nurse: async (_, { id }, { user }) => {
-            ensureAuthenticated(user);
-            const nurse = await Nurse.findById(id);
-
-            if (!nurse) {
-                throw new GraphQLError(`Nurse with ID ${id} not found`);
-            }
-
-            // Check if user is authorized to view this nurse
-            if (nurse.userId !== user.id) {
-                throw new GraphQLError('Not authorized to view this nurse');
-            }
-
-            return formatId(nurse);
-        },
-
-        nurseByUserId: async (_, { userId }, { user }) => {
-            ensureAuthenticated(user);
-
-            // Users can only access their own nurse record
-            if (userId !== user.id && user.role !== 'NURSE') {
-                throw new GraphQLError('Not authorized to view this nurse');
-            }
-
-            const nurse = await Nurse.findOne({ userId });
-            if (!nurse) {
-                return null; // No nurse record exists for this user
-            }
-
-            return formatId(nurse);
-        },
-
-        nursePatients: async (_, { nurseId }, { user }) => {
-            ensureAuthenticated(user);
-            const nurse = await Nurse.findById(nurseId);
-
-            if (!nurse) {
-                throw new GraphQLError(`Nurse with ID ${nurseId} not found`);
-            }
-
-            // Check if user is authorized to view this nurse's patients
-            if (nurse.userId !== user.id) {
-                throw new GraphQLError('Not authorized to view this nurse\'s patients');
-            }
-
-            return nurse.patients;
-        },
-
+        // Get all motivational tips for a specific patient
         motivationalTips: async (_, { patientId }, { user }) => {
-            ensureAuthenticated(user);
+            if (!user) {
+                throw new GraphQLError('Not authenticated');
+            }
 
-            // Patients can view their own tips, nurses can view all tips
+            // Patients can view their own tips, nurses can view tips for any patient
             if (user.role !== 'NURSE' && user.id !== patientId) {
                 throw new GraphQLError('Not authorized to view motivational tips for this patient');
             }
 
-            // Find all nurses that have tips for this patient
-            const nurses = await Nurse.find({});
+            // Find all nurse data records
+            const nursesData = await NurseData.find({});
             const allTips = [];
 
-            nurses.forEach(nurse => {
-                nurse.motivationalTips.forEach(tip => {
+            // Collect all tips for the specified patient
+            nursesData.forEach(nurseData => {
+                nurseData.motivationalTips.forEach(tip => {
                     if (tip.patientId === patientId) {
                         allTips.push({
                             ...tip._doc,
                             id: tip._id.toString(),
-                            nurseId: nurse._id.toString()
+                            nurseId: nurseData.userId
                         });
                     }
                 });
             });
 
             return allTips.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        },
+
+        // Get nurse data by user ID
+        nurseData: async (_, { userId }, { user }) => {
+            if (!user) {
+                throw new GraphQLError('Not authenticated');
+            }
+
+            // Users can only access their own nurse data record unless they are admin
+            if (userId !== user.id && user.role !== 'ADMIN') {
+                throw new GraphQLError('Not authorized to view this nurse data');
+            }
+
+            // Find or create nurse data record
+            let nurseData = await NurseData.findOne({ userId });
+
+            return nurseData ? formatId(nurseData) : null;
+        },
+
+        // Get all patients assigned to a nurse
+        nurseAssignedPatients: async (_, __, { user }) => {
+            ensureNurseAuthenticated(user);
+
+            const nurseData = await NurseData.findOne({ userId: user.id });
+
+            if (!nurseData) {
+                return []; // No nurse data record or no assigned patients
+            }
+
+            return nurseData.assignedPatients;
         }
     },
 
     Mutation: {
-        createNurse: async (_, { userId }, { user }) => {
-            ensureAuthenticated(user);
+        // Initialize nurse data for a user with nurse role
+        initializeNurseData: async (_, __, { user }) => {
+            ensureNurseAuthenticated(user);
 
-            // Only allow creating for self if nurse
-            if (userId !== user.id || user.role !== 'NURSE') {
-                throw new GraphQLError('Not authorized to create nurse record');
+            // Check if nurse data already exists
+            let nurseData = await NurseData.findOne({ userId: user.id });
+
+            if (nurseData) {
+                return formatId(nurseData); // Already initialized
             }
 
-            // Check if nurse already exists
-            const existingNurse = await Nurse.findOne({ userId });
-            if (existingNurse) {
-                throw new GraphQLError('Nurse record already exists for this user');
-            }
+            // Create new nurse data record
+            nurseData = new NurseData({
+                userId: user.id,
+                assignedPatients: [],
+                motivationalTips: []
+            });
 
-            // Create new nurse
-            const newNurse = new Nurse({ userId });
-            await newNurse.save();
-
-            return formatId(newNurse);
+            await nurseData.save();
+            return formatId(nurseData);
         },
 
-        addPatientToNurse: async (_, { nurseId, patientId }, { user }) => {
-            ensureAuthenticated(user);
-            const nurse = await Nurse.findById(nurseId);
+        // Add a patient to a nurse's assigned patients
+        assignPatientToNurse: async (_, { patientId }, { user }) => {
+            ensureNurseAuthenticated(user);
 
-            if (!nurse) {
-                throw new GraphQLError(`Nurse with ID ${nurseId} not found`);
+            // Find or create nurse data
+            let nurseData = await NurseData.findOne({ userId: user.id });
+
+            if (!nurseData) {
+                nurseData = new NurseData({
+                    userId: user.id,
+                    assignedPatients: [],
+                    motivationalTips: []
+                });
             }
 
-            // Check if user is authorized to modify this nurse
-            if (nurse.userId !== user.id) {
-                throw new GraphQLError('Not authorized to modify this nurse');
-            }
-
-            // Check if patient is already assigned to this nurse
-            if (nurse.patients.includes(patientId)) {
+            // Check if patient is already assigned
+            if (nurseData.assignedPatients.includes(patientId)) {
                 throw new GraphQLError('Patient already assigned to this nurse');
             }
 
-            // Add patient to nurse
-            nurse.patients.push(patientId);
-            await nurse.save();
+            // Add patient to assigned patients
+            nurseData.assignedPatients.push(patientId);
+            await nurseData.save();
 
-            return formatId(nurse);
+            return formatId(nurseData);
         },
 
-        addMotivationalTip: async (_, { nurseId, patientId, content }, { user }) => {
-            ensureAuthenticated(user);
-            const nurse = await Nurse.findById(nurseId);
+        // Remove a patient from a nurse's assigned patients
+        unassignPatientFromNurse: async (_, { patientId }, { user }) => {
+            ensureNurseAuthenticated(user);
 
-            if (!nurse) {
-                throw new GraphQLError(`Nurse with ID ${nurseId} not found`);
+            const nurseData = await NurseData.findOne({ userId: user.id });
+
+            if (!nurseData) {
+                throw new GraphQLError('Nurse data not found');
             }
 
-            // Check if user is authorized to modify this nurse
-            if (nurse.userId !== user.id) {
-                throw new GraphQLError('Not authorized to add motivational tip as this nurse');
+            // Remove patient from assigned patients
+            nurseData.assignedPatients = nurseData.assignedPatients.filter(id => id !== patientId);
+            await nurseData.save();
+
+            return formatId(nurseData);
+        },
+
+        // Add a motivational tip for a patient
+        addMotivationalTip: async (_, { patientId, content, category }, { user }) => {
+            ensureNurseAuthenticated(user);
+
+            // Find or create nurse data
+            let nurseData = await NurseData.findOne({ userId: user.id });
+
+            if (!nurseData) {
+                nurseData = new NurseData({
+                    userId: user.id,
+                    assignedPatients: [],
+                    motivationalTips: []
+                });
             }
 
-            // Check if nurse is assigned to this patient
-            if (!nurse.patients.includes(patientId)) {
-                throw new GraphQLError('Nurse is not assigned to this patient');
-            }
-
-            // Add motivational tip
+            // Create new tip
             const newTip = {
                 content,
                 patientId,
-                createdAt: new Date()
+                category: category || 'General',
+                createdAt: new Date(),
+                createdBy: {
+                    id: user.id,
+                    firstName: user.firstName || '',
+                    lastName: user.lastName || '',
+                    role: user.role
+                }
             };
 
-            nurse.motivationalTips.push(newTip);
-            await nurse.save();
+            // Add tip to nurse's motivational tips
+            nurseData.motivationalTips.push(newTip);
+            await nurseData.save();
 
-            const savedTip = nurse.motivationalTips[nurse.motivationalTips.length - 1];
+            // Return the newly created tip
+            const savedTip = nurseData.motivationalTips[nurseData.motivationalTips.length - 1];
             return {
                 ...savedTip._doc,
                 id: savedTip._id.toString(),
-                nurseId: nurse._id.toString()
+                nurseId: nurseData.userId
             };
+        },
+
+        // Update nurse specialization
+        updateNurseSpecialization: async (_, { specialization }, { user }) => {
+            ensureNurseAuthenticated(user);
+
+            let nurseData = await NurseData.findOne({ userId: user.id });
+
+            if (!nurseData) {
+                nurseData = new NurseData({
+                    userId: user.id,
+                    specialization,
+                    assignedPatients: [],
+                    motivationalTips: []
+                });
+            } else {
+                nurseData.specialization = specialization;
+            }
+
+            await nurseData.save();
+            return formatId(nurseData);
         }
     }
 };

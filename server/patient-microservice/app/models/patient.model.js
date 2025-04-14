@@ -8,6 +8,11 @@ const EmergencyAlertSchema = new Schema({
         type: String,
         required: true
     },
+    status: {
+        type: String,
+        enum: ['NEW', 'ACKNOWLEDGED', 'RESOLVED'],
+        default: 'NEW'
+    },
     createdAt: {
         type: Date,
         default: Date.now
@@ -40,6 +45,10 @@ const DailyRecordSchema = new Schema({
     respiratoryRate: {
         type: Number,
         default: null
+    },
+    notes: {
+        type: String,
+        default: ''
     }
 });
 
@@ -52,18 +61,57 @@ const SymptomSchema = new Schema({
     symptoms: [{
         type: String
     }],
+    severity: {
+        type: String,
+        enum: ['MILD', 'MODERATE', 'SEVERE'],
+        default: 'MODERATE'
+    },
     notes: {
         type: String,
         default: ''
     }
 });
 
-// Patient Schema
-const PatientSchema = new Schema({
-    userId: {
+// Appointment Schema
+const AppointmentSchema = new Schema({
+    date: {
         type: String,
         required: true
     },
+    time: {
+        type: String,
+        required: true
+    },
+    status: {
+        type: String,
+        enum: ['REQUESTED', 'CONFIRMED', 'CANCELLED', 'COMPLETED'],
+        default: 'REQUESTED'
+    },
+    reason: {
+        type: String,
+        required: true
+    },
+    notes: {
+        type: String
+    },
+    nurseId: {
+        type: String
+    }
+});
+
+// Patient Data Schema - stores only patient-specific data
+// Assumes user identity and role are managed by auth service
+const PatientDataSchema = new Schema({
+    userId: {
+        type: String,
+        required: true,
+        unique: true
+    },
+    emergencyContacts: [{
+        name: String,
+        relationship: String,
+        phone: String
+    }],
     emergencyAlerts: [EmergencyAlertSchema],
     dailyInfoRequired: {
         pulseRate: {
@@ -87,8 +135,24 @@ const PatientSchema = new Schema({
             default: false
         }
     },
+    medicalConditions: [{
+        name: String,
+        diagnosedDate: Date,
+        notes: String
+    }],
+    medications: [{
+        name: String,
+        dosage: String,
+        frequency: String,
+        startDate: Date,
+        endDate: Date
+    }],
+    preferredNurses: [{
+        type: String // References userId of nurses
+    }],
     dailyRecords: [DailyRecordSchema],
     symptoms: [SymptomSchema],
+    appointments: [AppointmentSchema],
     createdAt: {
         type: Date,
         default: Date.now
@@ -100,9 +164,9 @@ const PatientSchema = new Schema({
 });
 
 // Middleware to update the 'updatedAt' field on save
-PatientSchema.pre('save', function (next) {
+PatientDataSchema.pre('save', function (next) {
     this.updatedAt = Date.now();
     next();
 });
 
-export default mongoose.model('Patient', PatientSchema); 
+export default mongoose.model('PatientData', PatientDataSchema); 

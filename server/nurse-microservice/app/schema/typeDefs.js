@@ -1,18 +1,29 @@
 import gql from 'graphql-tag';
 
 const typeDefs = gql`
+    type MotivationalTipCreator {
+        id: ID!
+        firstName: String
+        lastName: String
+        role: String
+    }
+
     type MotivationalTip {
         id: ID!
         content: String!
         patientId: ID!
+        category: String
         createdAt: String!
+        createdBy: MotivationalTipCreator
+        nurseId: ID
     }
     
-    type Nurse @key(fields: "id") {
+    type NurseData @key(fields: "id") {
         id: ID!
         userId: ID!
+        specialization: String
         motivationalTips: [MotivationalTip!]
-        patients: [ID!]
+        assignedPatients: [ID!]
         createdAt: String!
         updatedAt: String!
     }
@@ -24,24 +35,30 @@ const typeDefs = gql`
         role: String! @external
     }
     
-    extend type Patient @key(fields: "id") {
-        id: ID! @external
-    }
-    
     type Query {
         # Nurse queries
-        nurses: [Nurse]
-        nurse(id: ID!): Nurse
-        nurseByUserId(userId: ID!): Nurse
-        nursePatients(nurseId: ID!): [ID!]
+        nurseData(userId: ID!): NurseData
+        nurseAssignedPatients: [ID!]
         motivationalTips(patientId: ID!): [MotivationalTip]
     }
     
     type Mutation {
-        # Nurse mutations
-        createNurse(userId: ID!): Nurse
-        addPatientToNurse(nurseId: ID!, patientId: ID!): Nurse
-        addMotivationalTip(nurseId: ID!, patientId: ID!, content: String!): MotivationalTip
+        # Nurse data initialization
+        initializeNurseData: NurseData
+        
+        # Patient assignments
+        assignPatientToNurse(patientId: ID!): NurseData
+        unassignPatientFromNurse(patientId: ID!): NurseData
+        
+        # Motivational tips
+        addMotivationalTip(
+            patientId: ID!, 
+            content: String!,
+            category: String
+        ): MotivationalTip
+        
+        # Specialization
+        updateNurseSpecialization(specialization: String!): NurseData
     }
 `;
 
