@@ -30,7 +30,7 @@ const LOGIN_MUTATION = gql`
 const UserComponent = () => {
   const [activeTab, setActiveTab] = useState('login');
   const [loginForm, setLoginForm] = useState({ userName: '', password: '' });
-  const [signupForm, setSignupForm] = useState({ userName: '', email: '', password: '', confirmPassword: '', role: 'resident' });
+  const [signupForm, setSignupForm] = useState({ userName: '', email: '', password: '', confirmPassword: '', role: 'PATIENT' });
   const [loginError, setLoginError] = useState('');
   const [signupError, setSignupError] = useState('');
   const [signupSuccess, setSignupSuccess] = useState('');
@@ -61,7 +61,7 @@ const UserComponent = () => {
   const [signup, { loading: signupLoading }] = useMutation(SIGNUP_MUTATION, {
     onCompleted: () => {
       setSignupSuccess('Account created successfully! Please login.');
-      setSignupForm({ userName: '', email: '', password: '', confirmPassword: '', role: 'patient' });
+      setSignupForm({ userName: '', email: '', password: '', confirmPassword: '', role: 'PATIENT' });
       setActiveTab('login');
     },
     onError: (error) => {
