@@ -1,8 +1,9 @@
-import { ApolloClient, InMemoryCache, createHttpLink, ApolloProvider } from '@apollo/client';
+import { ApolloClient, InMemoryCache, createHttpLink, ApolloProvider, gql, useMutation } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import './App.css';
+import 'bootstrap/dist/css/bootstrap.min.css';
 import Dashboard from './pages/Dashboard';
 import PatientList from './pages/PatientList';
 import PatientDetail from './pages/PatientDetail';
@@ -12,7 +13,7 @@ import ViewMedicalConditions from './pages/ViewMedicalConditions';
 import Navbar from './components/Navbar';
 
 const httpLink = createHttpLink({
-  uri: 'http://localhost:4000/graphql', 
+  uri: 'http://localhost:4000/graphql',
 });
 
 // Auth link for adding the token to headers
@@ -34,13 +35,47 @@ const client = new ApolloClient({
   cache: new InMemoryCache(),
 });
 
+// Initialize nurse data mutation
+const INITIALIZE_NURSE_DATA = gql`
+  mutation InitializeNurseData {
+    initializeNurseData {
+      id
+      userId
+    }
+  }
+`;
+
 function App() {
   const [authenticated, setAuthenticated] = useState(false);
+  const [initializing, setInitializing] = useState(true);
+  
+  // Initialize nurse data
+  const [initializeNurseData] = useMutation(INITIALIZE_NURSE_DATA, {
+    onCompleted: (data) => {
+      console.log('Nurse data initialized:', data);
+      setInitializing(false);
+    },
+    onError: (error) => {
+      console.error('Error initializing nurse data:', error);
+      setInitializing(false);
+    }
+  });
 
   useEffect(() => {
     const token = localStorage.getItem('authToken');
     setAuthenticated(!!token);
-  }, []);
+    
+    // If authenticated, initialize nurse data
+    if (token) {
+      initializeNurseData();
+    } else {
+      setInitializing(false);
+    }
+  }, [initializeNurseData]);
+
+  if (initializing && authenticated) {
+    return <div className="d-flex justify-content-center align-items-center vh-100">Initializing...</div>;
+  }
 
   return (
     <ApolloProvider client={client}>

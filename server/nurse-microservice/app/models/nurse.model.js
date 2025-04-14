@@ -12,22 +12,39 @@ const MotivationalTipSchema = new Schema({
         type: String,
         required: true
     },
+    category: {
+        type: String,
+        default: 'General'
+    },
     createdAt: {
         type: Date,
         default: Date.now
+    },
+    createdBy: {
+        id: String,
+        firstName: String,
+        lastName: String,
+        role: String
     }
 });
 
-// Nurse Schema
-const NurseSchema = new Schema({
+// Nurse Data Schema - stores only nurse-specific data
+// Assumes user identity and role are managed by auth service
+const NurseDataSchema = new Schema({
     userId: {
         type: String,
-        required: true
+        required: true,
+        unique: true
     },
     motivationalTips: [MotivationalTipSchema],
-    patients: [{
-        type: String
+    assignedPatients: [{
+        type: String,
+        ref: 'User'  // References userId in the User model from auth service
     }],
+    specialization: {
+        type: String,
+        default: 'General'
+    },
     createdAt: {
         type: Date,
         default: Date.now
@@ -39,9 +56,9 @@ const NurseSchema = new Schema({
 });
 
 // Middleware to update the 'updatedAt' field on save
-NurseSchema.pre('save', function (next) {
+NurseDataSchema.pre('save', function (next) {
     this.updatedAt = Date.now();
     next();
 });
 
-export default mongoose.model('Nurse', NurseSchema); 
+export default mongoose.model('NurseData', NurseDataSchema); 
