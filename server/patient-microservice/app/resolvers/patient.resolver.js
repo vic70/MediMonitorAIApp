@@ -140,24 +140,37 @@ const patientResolvers = {
         // Get daily records for a specific patient
         patientDailyRecords: async (_, { patientId }, { user }) => {
             ensureAuthenticated(user);
+            console.log('Fetching daily records for patientId:', patientId);
+            console.log('Authenticated user:', user);
 
-            // Find patient data
-            const patientData = await PatientData.findOne({ userId: patientId });
+            try {
+                // Find patient data
+                const patientData = await PatientData.findOne({ userId: patientId });
+                console.log('Found patient data:', patientData ? 'yes' : 'no');
 
-            if (!patientData) {
-                return [];
+                if (!patientData) {
+                    console.log('No patient data found');
+                    return [];
+                }
+
+                // Check if user is authorized to view this patient's records
+                if (user.role !== 'NURSE' && user.id !== patientId) {
+                    throw new GraphQLError('Not authorized to view this patient\'s daily records');
+                }
+
+                // Map the daily records and ensure proper date formatting
+                const records = patientData.dailyRecords.map(record => ({
+                    ...record._doc,
+                    id: record._id.toString(),
+                    date: record.date.toISOString()
+                }));
+
+                console.log('Returning records:', records.length);
+                return records;
+            } catch (error) {
+                console.error('Error in patientDailyRecords resolver:', error);
+                throw error;
             }
-
-            // Check if user is authorized to view this patient's records
-            if (user.role !== 'NURSE' && user.id !== patientId) {
-                throw new GraphQLError('Not authorized to view this patient\'s daily records');
-            }
-
-            return patientData.dailyRecords.map(record => ({
-                ...record._doc,
-                id: record._id.toString(),
-                date: record.date.toISOString()
-            }));
         },
 
         // Get symptoms for a specific patient
