@@ -1,41 +1,24 @@
-import { useState } from 'react';
-import { Container, Card, Form, Button, Row, Col, Alert, Table } from 'react-bootstrap';
-import { useQuery, useMutation, gql } from '@apollo/client';
-import { format, parseISO } from 'date-fns';
+import { useState, useEffect } from 'react';
+import { useMutation, useQuery, gql } from '@apollo/client';
+import { Form, Button, Alert, Container, Table } from 'react-bootstrap';
 
-// Updated queries for PatientData
-const GET_PATIENT_DATA = gql`
-  query GetPatientData($userId: ID!) {
+const GET_DAILY_RECORDS = gql`
+  query GetDailyRecords($userId: ID!) {
     patientDataByUserId(userId: $userId) {
-      id
-      userId
-      dailyInfoRequired {
+      dailyRecords {
+        id
+        date
         pulseRate
         bloodPressure
         weight
         temperature
         respiratoryRate
+        notes
       }
     }
   }
 `;
 
-const GET_DAILY_RECORDS = gql`
-  query GetDailyRecords($patientId: ID!) {
-    patientDailyRecords(patientId: $patientId) {
-      id
-      date
-      pulseRate
-      bloodPressure
-      weight
-      temperature
-      respiratoryRate
-      notes
-    }
-  }
-`;
-
-// Updated mutation to add daily record
 const ADD_DAILY_RECORD = gql`
   mutation AddDailyRecord(
     $date: String!,
@@ -68,7 +51,6 @@ const ADD_DAILY_RECORD = gql`
 `;
 
 const DailyRecords = () => {
-  const userId = localStorage.getItem('userId');
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     pulseRate: '',
@@ -78,40 +60,66 @@ const DailyRecords = () => {
     respiratoryRate: '',
     notes: ''
   });
-  const [message, setMessage] = useState(null);
-  const [requiredFields, setRequiredFields] = useState({
-    pulseRate: false,
-    bloodPressure: false,
-    weight: false,
-    temperature: false,
-    respiratoryRate: false
-  });
 
-  // Get patient data to check required fields
-  const { loading: loadingPatient, error: errorPatient } = useQuery(GET_PATIENT_DATA, {
+  // Get user data from localStorage
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const userId = user.id;
+  console.log('Current userId from localStorage:', userId);
+
+  const { data: recordsData, loading: recordsLoading, error: queryError, refetch } = useQuery(GET_DAILY_RECORDS, {
     variables: { userId },
     skip: !userId,
     onCompleted: (data) => {
-      if (data?.patientDataByUserId) {
-        setRequiredFields(data.patientDataByUserId.dailyInfoRequired);
-      }
+      console.log('Query completed. Received data:', data);
+    },
+    onError: (error) => {
+      console.error('Query error:', error);
     }
   });
 
-  // Get daily records
-  const { loading: loadingRecords, error: errorRecords, data: recordsData, refetch } = useQuery(GET_DAILY_RECORDS, {
-    variables: { patientId: userId },
-    skip: !userId,
-    fetchPolicy: 'network-only'
+  useEffect(() => {
+    console.log('Records data updated:', recordsData);
+  }, [recordsData]);
+
+  const [addRecord, { loading: submitLoading, error }] = useMutation(ADD_DAILY_RECORD, {
+    onError: (error) => {
+      console.error('Error adding daily record:', error);
+    },
+    onCompleted: (data) => {
+      console.log('Successfully added record:', data);
+      refetch();
+    }
   });
 
-  // Add daily record mutation
-  const [addDailyRecord, { loading: submitting }] = useMutation(ADD_DAILY_RECORD, {
-    onCompleted: () => {
-      setMessage({
-        type: 'success',
-        text: 'Daily record added successfully!'
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    try {
+      const variables = {
+        date: formData.date,
+        notes: formData.notes || undefined
+      };
+
+      if (formData.pulseRate) variables.pulseRate = parseFloat(formData.pulseRate);
+      if (formData.bloodPressure) variables.bloodPressure = formData.bloodPressure;
+      if (formData.weight) variables.weight = parseFloat(formData.weight);
+      if (formData.temperature) variables.temperature = parseFloat(formData.temperature);
+      if (formData.respiratoryRate) variables.respiratoryRate = parseFloat(formData.respiratoryRate);
+
+      console.log('Submitting variables:', variables);
+
+      await addRecord({ 
+        variables,
+        update: (cache, { data }) => {
+          console.log('Record added:', data);
+        }
       });
+
       setFormData({
         date: new Date().toISOString().split('T')[0],
         pulseRate: '',
@@ -121,249 +129,141 @@ const DailyRecords = () => {
         respiratoryRate: '',
         notes: ''
       });
-      refetch();
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => setMessage(null), 3000);
-    },
-    onError: (error) => {
-      setMessage({
-        type: 'danger',
-        text: `Error: ${error.message}`
-      });
+    } catch (err) {
+      console.error('Error submitting record:', err);
     }
-  });
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value
-    });
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    // Format data for submission
-    const submitData = {
-      date: formData.date,
-      notes: formData.notes
-    };
-    
-    // Only include numeric fields if they have a value
-    if (formData.pulseRate) submitData.pulseRate = parseFloat(formData.pulseRate);
-    if (formData.bloodPressure) submitData.bloodPressure = formData.bloodPressure;
-    if (formData.weight) submitData.weight = parseFloat(formData.weight);
-    if (formData.temperature) submitData.temperature = parseFloat(formData.temperature);
-    if (formData.respiratoryRate) submitData.respiratoryRate = parseFloat(formData.respiratoryRate);
-    
-    addDailyRecord({ variables: submitData });
-  };
-
-  const getDailyRecords = () => {
-    if (!recordsData?.patientDailyRecords) return [];
-    
-    // Create a copy of the records and sort by date (newest first)
-    const records = [...recordsData.patientDailyRecords];
-    return records.sort((a, b) => new Date(b.date) - new Date(a.date));
   };
 
   const formatDate = (dateString) => {
-    try {
-      return format(parseISO(dateString), 'MMM dd, yyyy');
-    } catch (
-      // eslint-disable-next-line no-unused-vars
-      error
-    ) {
-      return dateString;
-    }
+    return new Date(dateString).toLocaleDateString();
   };
 
-  const isLoading = loadingPatient || loadingRecords;
-  const isError = errorPatient || errorRecords;
-  const sortedRecords = getDailyRecords();
-
-  if (isError) return <p>Error loading patient data</p>;
+  if (queryError) {
+    console.error('Query error details:', queryError);
+    return <Alert variant="danger">Error loading records: {queryError.message}</Alert>;
+  }
 
   return (
     <Container>
-      <h2 className="mb-4">Daily Health Records</h2>
-      
-      {message && (
-        <Alert variant={message.type} onClose={() => setMessage(null)} dismissible>
-          {message.text}
-        </Alert>
-      )}
-      
-      <Card className="mb-4">
-        <Card.Body>
-          <Card.Title>Add New Record</Card.Title>
-          <Form onSubmit={handleSubmit}>
-            <Row>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Date</Form.Label>
-                  <Form.Control
-                    type="date"
-                    name="date"
-                    value={formData.date}
-                    onChange={handleChange}
-                    required
-                  />
-                </Form.Group>
-              </Col>
-            </Row>
-            
-            <Row>
-              <Col md={4}>
-                <Form.Group className="mb-3">
-                  <Form.Label>
-                    Pulse Rate {requiredFields.pulseRate && <span className="text-danger">*</span>}
-                  </Form.Label>
-                  <Form.Control
-                    type="number"
-                    step="0.1"
-                    name="pulseRate"
-                    value={formData.pulseRate}
-                    onChange={handleChange}
-                    placeholder="bpm"
-                    required={requiredFields.pulseRate}
-                  />
-                </Form.Group>
-              </Col>
-              
-              <Col md={4}>
-                <Form.Group className="mb-3">
-                  <Form.Label>
-                    Blood Pressure {requiredFields.bloodPressure && <span className="text-danger">*</span>}
-                  </Form.Label>
-                  <Form.Control
-                    type="text"
-                    name="bloodPressure"
-                    value={formData.bloodPressure}
-                    onChange={handleChange}
-                    placeholder="e.g. 120/80"
-                    required={requiredFields.bloodPressure}
-                  />
-                </Form.Group>
-              </Col>
-              
-              <Col md={4}>
-                <Form.Group className="mb-3">
-                  <Form.Label>
-                    Weight {requiredFields.weight && <span className="text-danger">*</span>}
-                  </Form.Label>
-                  <Form.Control
-                    type="number"
-                    step="0.1"
-                    name="weight"
-                    value={formData.weight}
-                    onChange={handleChange}
-                    placeholder="kg"
-                    required={requiredFields.weight}
-                  />
-                </Form.Group>
-              </Col>
-            </Row>
-            
-            <Row>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>
-                    Temperature {requiredFields.temperature && <span className="text-danger">*</span>}
-                  </Form.Label>
-                  <Form.Control
-                    type="number"
-                    step="0.1"
-                    name="temperature"
-                    value={formData.temperature}
-                    onChange={handleChange}
-                    placeholder="°C"
-                    required={requiredFields.temperature}
-                  />
-                </Form.Group>
-              </Col>
-              
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>
-                    Respiratory Rate {requiredFields.respiratoryRate && <span className="text-danger">*</span>}
-                  </Form.Label>
-                  <Form.Control
-                    type="number"
-                    step="0.1"
-                    name="respiratoryRate"
-                    value={formData.respiratoryRate}
-                    onChange={handleChange}
-                    placeholder="breaths per minute"
-                    required={requiredFields.respiratoryRate}
-                  />
-                </Form.Group>
-              </Col>
-            </Row>
-            
-            <Form.Group className="mb-3">
-              <Form.Label>Notes</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={3}
-                name="notes"
-                value={formData.notes}
-                onChange={handleChange}
-                placeholder="Any additional notes about your health today"
-              />
-            </Form.Group>
-            
-            <Button 
-              variant="primary" 
-              type="submit" 
-              disabled={submitting || isLoading}
-            >
-              {submitting ? 'Submitting...' : 'Add Record'}
-            </Button>
-          </Form>
-        </Card.Body>
-      </Card>
-      
-      <h3 className="mt-4 mb-3">Previous Records</h3>
-      
-      {isLoading ? (
+      <h2 className="mb-4">Add Daily Health Record</h2>
+      <Form onSubmit={handleSubmit} className="mb-5">
+        {error && <Alert variant="danger">Error submitting record: {error.message}</Alert>}
+        
+        <Form.Group className="mb-3" controlId="date">
+          <Form.Label>Date</Form.Label>
+          <Form.Control
+            type="date"
+            name="date"
+            value={formData.date}
+            onChange={handleChange}
+            required
+          />
+        </Form.Group>
+
+        <Form.Group className="mb-3" controlId="pulseRate">
+          <Form.Label>Pulse Rate (bpm)</Form.Label>
+          <Form.Control
+            type="number"
+            name="pulseRate"
+            value={formData.pulseRate}
+            onChange={handleChange}
+          />
+        </Form.Group>
+
+        <Form.Group className="mb-3" controlId="bloodPressure">
+          <Form.Label>Blood Pressure (mmHg)</Form.Label>
+          <Form.Control
+            type="text"
+            name="bloodPressure"
+            value={formData.bloodPressure}
+            onChange={handleChange}
+            placeholder="e.g., 120/80"
+          />
+        </Form.Group>
+
+        <Form.Group className="mb-3" controlId="weight">
+          <Form.Label>Weight (kg)</Form.Label>
+          <Form.Control
+            type="number"
+            step="0.1"
+            name="weight"
+            value={formData.weight}
+            onChange={handleChange}
+          />
+        </Form.Group>
+
+        <Form.Group className="mb-3" controlId="temperature">
+          <Form.Label>Temperature (°C)</Form.Label>
+          <Form.Control
+            type="number"
+            step="0.1"
+            name="temperature"
+            value={formData.temperature}
+            onChange={handleChange}
+          />
+        </Form.Group>
+
+        <Form.Group className="mb-3" controlId="respiratoryRate">
+          <Form.Label>Respiratory Rate (breaths per minute)</Form.Label>
+          <Form.Control
+            type="number"
+            name="respiratoryRate"
+            value={formData.respiratoryRate}
+            onChange={handleChange}
+          />
+        </Form.Group>
+
+        <Form.Group className="mb-3" controlId="notes">
+          <Form.Label>Additional Notes</Form.Label>
+          <Form.Control
+            as="textarea"
+            rows={3}
+            name="notes"
+            value={formData.notes}
+            onChange={handleChange}
+          />
+        </Form.Group>
+
+        <Button variant="primary" type="submit" disabled={submitLoading}>
+          {submitLoading ? 'Submitting...' : 'Submit Record'}
+        </Button>
+      </Form>
+
+      <h3 className="mb-4">Your Daily Records</h3>
+      {recordsLoading ? (
         <p>Loading records...</p>
-      ) : sortedRecords.length > 0 ? (
-        <div className="table-responsive">
-          <Table striped bordered hover>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Pulse Rate</th>
-                <th>Blood Pressure</th>
-                <th>Weight</th>
-                <th>Temperature</th>
-                <th>Respiratory Rate</th>
-                <th>Notes</th>
+      ) : recordsData?.patientDataByUserId?.dailyRecords?.length > 0 ? (
+        <Table striped bordered hover responsive>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Pulse Rate (bpm)</th>
+              <th>Blood Pressure</th>
+              <th>Weight (kg)</th>
+              <th>Temperature (°C)</th>
+              <th>Respiratory Rate</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {recordsData.patientDataByUserId.dailyRecords.map((record) => (
+              <tr key={record.id}>
+                <td>{formatDate(record.date)}</td>
+                <td>{record.pulseRate || '-'}</td>
+                <td>{record.bloodPressure || '-'}</td>
+                <td>{record.weight || '-'}</td>
+                <td>{record.temperature || '-'}</td>
+                <td>{record.respiratoryRate || '-'}</td>
+                <td>{record.notes || '-'}</td>
               </tr>
-            </thead>
-            <tbody>
-              {sortedRecords.map(record => (
-                <tr key={record.id}>
-                  <td>{formatDate(record.date)}</td>
-                  <td>{record.pulseRate || '-'}</td>
-                  <td>{record.bloodPressure || '-'}</td>
-                  <td>{record.weight || '-'}</td>
-                  <td>{record.temperature || '-'}</td>
-                  <td>{record.respiratoryRate || '-'}</td>
-                  <td>{record.notes || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </div>
+            ))}
+          </tbody>
+        </Table>
       ) : (
-        <p>No records found. Start tracking your health by adding a record above.</p>
+        <p>No records found. {!userId ? '(No user ID found in localStorage)' : ''}</p>
       )}
     </Container>
   );
 };
 
-export default DailyRecords; 
+export default DailyRecords;

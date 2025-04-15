@@ -17,6 +17,12 @@ const GET_PATIENT_DATA = gql`
       dailyRecords {
         id
         date
+        pulseRate
+        bloodPressure
+        weight
+        temperature
+        respiratoryRate
+        notes
       }
       emergencyAlerts {
         id
@@ -43,20 +49,23 @@ const Dashboard = () => {
   
   const { data: patientData, loading: patientLoading } = useQuery(GET_PATIENT_DATA, {
     variables: { userId },
-    skip: !userId
+    skip: !userId,
+    onCompleted: (data) => {
+      console.log('Patient Data:', data);
+      if (data?.patientByUserId) {
+        setPatientId(data.patientByUserId.id);
+        setRequiredInfo(data.patientByUserId.dailyInfoRequired || {});
+      }
+    },
+    onError: (error) => {
+      console.error('Error fetching patient data:', error);
+    }
   });
   
   const { data: tipsData, loading: tipsLoading } = useQuery(GET_MOTIVATIONAL_TIPS, {
     variables: { patientId },
     skip: !patientId
   });
-  
-  useEffect(() => {
-    if (patientData?.patientByUserId) {
-      setPatientId(patientData.patientByUserId.id);
-      setRequiredInfo(patientData.patientByUserId.dailyInfoRequired || {});
-    }
-  }, [patientData]);
   
   // Get most recent record date
   const lastRecordDate = patientData?.patientByUserId?.dailyRecords?.length > 0 
