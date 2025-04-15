@@ -39,6 +39,7 @@ const loggingPlugin = {
 
 const server = new ApolloServer({
     schema: buildSubgraphSchema([{ typeDefs, resolvers }]),
+    debug: true,
     // plugins: [loggingPlugin],
 });
 

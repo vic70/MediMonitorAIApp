@@ -3,11 +3,14 @@ import mongoose from 'mongoose';
 import { GraphQLError } from 'graphql';
 
 // Helper function to convert MongoDB ObjectId to String ID
+// and convert Date fields (createdAt, updatedAt) to ISO strings.
 const formatId = (obj) => {
     if (!obj) return null;
     return {
         ...obj._doc,
-        id: obj._id.toString()
+        id: obj._id.toString(),
+        createdAt: obj.createdAt ? obj.createdAt.toISOString() : null,
+        updatedAt: obj.updatedAt ? obj.updatedAt.toISOString() : null,
     };
 };
 
@@ -19,32 +22,29 @@ const parseId = (id) => {
     return mongoose.Types.ObjectId(id);
 };
 
-// Helper to ensure user is authenticated and has patient role
-const ensurePatientAuthenticated = (user) => {
+// Helpers for authentication and role checking
+const ensureAuthenticated = (user) => {
     if (!user) {
         throw new GraphQLError('Not authenticated', {
-            extensions: {
-                code: 'UNAUTHENTICATED'
-            }
-        });
-    }
-
-    if (user.role !== 'PATIENT') {
-        throw new GraphQLError('Not authorized - requires patient role', {
-            extensions: {
-                code: 'FORBIDDEN'
-            }
+            extensions: { code: 'UNAUTHENTICATED' }
         });
     }
 };
 
-// Helper to ensure user is authenticated
-const ensureAuthenticated = (user) => {
-    if (!user) {
-        throw new GraphQLError('Not authenticated', {
-            extensions: {
-                code: 'UNAUTHENTICATED'
-            }
+const ensurePatientAuthenticated = (user) => {
+    ensureAuthenticated(user);
+    if (user.role !== 'PATIENT') {
+        throw new GraphQLError('Not authorized – requires patient role', {
+            extensions: { code: 'FORBIDDEN' }
+        });
+    }
+};
+
+const ensureNurseAuthenticated = (user) => {
+    ensureAuthenticated(user);
+    if (user.role !== 'NURSE') {
+        throw new GraphQLError('Not authorized – requires nurse role', {
+            extensions: { code: 'FORBIDDEN' }
         });
     }
 };
@@ -53,11 +53,7 @@ const patientResolvers = {
     Query: {
         // Get all patients (for nurses only)
         patientsData: async (_, __, { user }) => {
-            ensureAuthenticated(user);
-            if (user.role !== 'NURSE') {
-                throw new GraphQLError('Not authorized to view all patients data');
-            }
-
+            ensureNurseAuthenticated(user);
             const patientsData = await PatientData.find({});
             return patientsData.map(formatId);
         },
@@ -66,156 +62,98 @@ const patientResolvers = {
         patientData: async (_, { id }, { user }) => {
             ensureAuthenticated(user);
             const patientData = await PatientData.findById(parseId(id));
+            if (!patientData) return null;
 
-            if (!patientData) {
-                return null;
-            }
-
-            // Check if user is authorized to view this patient data
+            // Allow nurses to view any data; patients see only their own record.
             if (user.role !== 'NURSE' && patientData.userId !== user.id) {
                 throw new GraphQLError('Not authorized to view this patient data');
             }
-
             return formatId(patientData);
         },
 
         // Get patient data by user ID
         patientDataByUserId: async (_, { userId }, { user }) => {
             ensureAuthenticated(user);
-
             // Users can only access their own patient data unless they are nurse
             if (user.role !== 'NURSE' && userId !== user.id) {
                 throw new GraphQLError('Not authorized to view this patient data');
             }
-
-            const patientData = await PatientData.findOne({ userId });
+            const patientData = await PatientData.findOne({ user: userId });
             return patientData ? formatId(patientData) : null;
         },
 
-        // Get all emergency alerts (for nurses only)
+        // Get all emergency alerts (nurse view)
         emergencyAlerts: async (_, __, { user }) => {
-            ensureAuthenticated(user);
-            if (user.role !== 'NURSE') {
-                throw new GraphQLError('Not authorized to view all emergency alerts');
-            }
-
+            ensureNurseAuthenticated(user);
             const patientsData = await PatientData.find({});
             const allAlerts = [];
-
             patientsData.forEach(patientData => {
                 patientData.emergencyAlerts.forEach(alert => {
                     allAlerts.push({
                         ...alert._doc,
                         id: alert._id.toString(),
-                        patientId: patientData.userId
+                        patientId: patientData.userId, // adjust if your schema field is "user"
+                        createdAt: alert.createdAt ? alert.createdAt.toISOString() : null
                     });
                 });
             });
-
             return allAlerts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         },
 
-        // Get emergency alerts for a specific patient
+        // [Patient and Nurse] Get emergency alerts for a specific patient
         patientEmergencyAlerts: async (_, { patientId }, { user }) => {
             ensureAuthenticated(user);
-
-            // Find patient data
-            const patientData = await PatientData.findOne({ userId: patientId });
-
-            if (!patientData) {
-                return [];
-            }
-
-            // Check if user is authorized to view this patient's alerts
+            const patientData = await PatientData.findOne({ user: patientId });
+            if (!patientData) return [];
+            // Only allow access if user is a nurse or the patient themselves.
             if (user.role !== 'NURSE' && user.id !== patientId) {
                 throw new GraphQLError('Not authorized to view this patient\'s emergency alerts');
             }
-
             return patientData.emergencyAlerts.map(alert => ({
                 ...alert._doc,
-                id: alert._id.toString()
+                id: alert._id.toString(),
+                createdAt: alert.createdAt ? alert.createdAt.toISOString() : null
             }));
         },
 
-        // Get daily records for a specific patient
+        // [Patient and Nurse] Get daily records (clinical visits, vital signs)
         patientDailyRecords: async (_, { patientId }, { user }) => {
             ensureAuthenticated(user);
-            console.log('Fetching daily records for patientId:', patientId);
-            console.log('Authenticated user:', user);
-
-            try {
-                // Find patient data
-                const patientData = await PatientData.findOne({ userId: patientId });
-                console.log('Found patient data:', patientData ? 'yes' : 'no');
-
-                if (!patientData) {
-                    console.log('No patient data found');
-                    return [];
-                }
-
-                // Check if user is authorized to view this patient's records
-                if (user.role !== 'NURSE' && user.id !== patientId) {
-                    throw new GraphQLError('Not authorized to view this patient\'s daily records');
-                }
-
-                // Map the daily records and ensure proper date formatting
-                const records = patientData.dailyRecords.map(record => ({
-                    ...record._doc,
-                    id: record._id.toString(),
-                    date: record.date.toISOString()
-                }));
-
-                console.log('Returning records:', records.length);
-                return records;
-            } catch (error) {
-                console.error('Error in patientDailyRecords resolver:', error);
-                throw error;
+            const patientData = await PatientData.findOne({ user: patientId });
+            if (!patientData) return [];
+            // Only allow access if user is a nurse or the owner patient.
+            if (user.role !== 'NURSE' && user.id !== patientId) {
+                throw new GraphQLError('Not authorized to view this patient\'s daily records');
             }
+            return patientData.dailyRecords.map(record => ({
+                ...record._doc,
+                id: record._id.toString(),
+                date: record.date ? record.date.toISOString() : null
+            }));
         },
 
-        // Get symptoms for a specific patient
+        // [Patient & Nurse] Get patient symptoms (symptoms is now a separate subdocument)
         patientSymptoms: async (_, { patientId }, { user }) => {
             ensureAuthenticated(user);
-
-            // Find patient data
-            const patientData = await PatientData.findOne({ userId: patientId });
-
-            if (!patientData) {
-                return [];
-            }
-
-            // Check if user is authorized to view this patient's symptoms
+            const patientData = await PatientData.findOne({ user: patientId });
+            if (!patientData) return null;
+            // Only allow access if user is a nurse or the patient themselves.
             if (user.role !== 'NURSE' && user.id !== patientId) {
                 throw new GraphQLError('Not authorized to view this patient\'s symptoms');
             }
-
-            return patientData.symptoms.map(symptom => ({
-                ...symptom._doc,
-                id: symptom._id.toString(),
-                date: symptom.date.toISOString()
-            }));
+            return patientData.symptoms;
         },
 
-        // Get appointments for a specific patient
-        appointmentsByPatientId: async (_, { patientId }, { user }) => {
+        // [Patient & Nurse] Get the daily required info (DailyInfoRequiredSchema) for a patient
+        patientDailyInfoRequired: async (_, { patientId }, { user }) => {
             ensureAuthenticated(user);
-
-            // Find patient data
-            const patientData = await PatientData.findOne({ userId: patientId });
-
-            if (!patientData) {
-                return [];
-            }
-
-            // Check if user is authorized to view this patient's appointments
+            const patientData = await PatientData.findOne({ user: patientId });
+            if (!patientData) return null;
+            // Only allow access if the user is a nurse or the patient themselves.
             if (user.role !== 'NURSE' && user.id !== patientId) {
-                throw new GraphQLError('Not authorized to view this patient\'s appointments');
+                throw new GraphQLError('Not authorized to view this patient\'s daily information requirements');
             }
-
-            return patientData.appointments.map(appointment => ({
-                ...appointment._doc,
-                id: appointment._id.toString()
-            }));
+            return patientData.dailyInfoRequired;
         }
     },
 
@@ -223,303 +161,101 @@ const patientResolvers = {
         // Initialize patient data for a user with patient role
         initializePatientData: async (_, __, { user }) => {
             ensurePatientAuthenticated(user);
-
             // Check if patient data already exists
-            let patientData = await PatientData.findOne({ userId: user.id });
-
+            let patientData = await PatientData.findOne({ user: user.id });
             if (patientData) {
                 return formatId(patientData); // Already initialized
             }
-
             // Create new patient data record
-            patientData = new PatientData({ userId: user.id });
+            patientData = new PatientData({ user: user.id });
             await patientData.save();
-
             return formatId(patientData);
         },
 
-        // Create emergency alert
+        // [Patient] Create an emergency alert to notify first responders
         createEmergencyAlert: async (_, { content }, { user }) => {
             ensurePatientAuthenticated(user);
-
-            // Find or create patient data
-            let patientData = await PatientData.findOne({ userId: user.id });
-
+            let patientData = await PatientData.findOne({ user: user.id });
             if (!patientData) {
-                patientData = new PatientData({ userId: user.id });
+                patientData = new PatientData({ user: user.id });
             }
-
-            // Create new alert
             const newAlert = {
                 content,
-                status: 'NEW',
                 createdAt: new Date()
             };
-
             patientData.emergencyAlerts.push(newAlert);
             await patientData.save();
-
-            // Return the newly created alert
             const savedAlert = patientData.emergencyAlerts[patientData.emergencyAlerts.length - 1];
             return {
                 ...savedAlert._doc,
-                id: savedAlert._id.toString()
+                id: savedAlert._id.toString(),
+                createdAt: savedAlert.createdAt ? savedAlert.createdAt.toISOString() : null
             };
         },
 
-        // Update emergency alert status (for nurses)
-        updateEmergencyAlertStatus: async (_, { patientId, alertId, status }, { user }) => {
-            ensureAuthenticated(user);
-
-            if (user.role !== 'NURSE') {
-                throw new GraphQLError('Not authorized to update alert status');
-            }
-
-            // Find patient data
-            const patientData = await PatientData.findOne({ userId: patientId });
-
-            if (!patientData) {
-                throw new GraphQLError('Patient data not found');
-            }
-
-            // Find the alert
-            const alert = patientData.emergencyAlerts.id(alertId);
-
-            if (!alert) {
-                throw new GraphQLError('Alert not found');
-            }
-
-            // Update status
-            alert.status = status;
-            await patientData.save();
-
-            return {
-                ...alert._doc,
-                id: alert._id.toString()
-            };
-        },
-
-        // Add daily record
-        addDailyRecord: async (_, { date, pulseRate, bloodPressure, weight, temperature, respiratoryRate, notes }, { user }) => {
+        // [Patient] Add a new daily record (enter daily vital signs)
+        addDailyRecord: async (
+            _,
+            { date, pulseRate, bloodPressure, weight, temperature, respiratoryRate },
+            { user }
+        ) => {
             ensurePatientAuthenticated(user);
-
-            // Find or create patient data
-            let patientData = await PatientData.findOne({ userId: user.id });
-
+            let patientData = await PatientData.findOne({ user: user.id });
             if (!patientData) {
-                patientData = new PatientData({ userId: user.id });
+                patientData = new PatientData({ user: user.id });
             }
-
-            // Create new daily record
             const newDailyRecord = {
                 date: new Date(date),
                 pulseRate,
                 bloodPressure,
                 weight,
                 temperature,
-                respiratoryRate,
-                notes
+                respiratoryRate
             };
-
             patientData.dailyRecords.push(newDailyRecord);
             await patientData.save();
-
-            // Return the newly created record
             const savedRecord = patientData.dailyRecords[patientData.dailyRecords.length - 1];
             return {
                 ...savedRecord._doc,
                 id: savedRecord._id.toString(),
-                date: savedRecord.date.toISOString()
+                date: savedRecord.date ? savedRecord.date.toISOString() : null
             };
         },
 
-        // Add symptom
-        addSymptom: async (_, { date, symptoms, severity, notes }, { user }) => {
+        // [Patient] Submit a checklist of symptoms 
+        addSymptom: async (_, { symptoms }, { user }) => {
             ensurePatientAuthenticated(user);
-
-            // Find or create patient data
-            let patientData = await PatientData.findOne({ userId: user.id });
-
+            let patientData = await PatientData.findOne({ user: user.id });
             if (!patientData) {
-                patientData = new PatientData({ userId: user.id });
+                patientData = new PatientData({ user: user.id });
             }
-
-            // Create new symptom
-            const newSymptom = {
-                date: new Date(date || Date.now()),
-                symptoms,
-                severity: severity || 'MODERATE',
-                notes
-            };
-
-            patientData.symptoms.push(newSymptom);
+            // Update the symptoms field with the provided checklist.
+            patientData.symptoms = { ...symptoms };
             await patientData.save();
-
-            // Return the newly created symptom
-            const savedSymptom = patientData.symptoms[patientData.symptoms.length - 1];
-            return {
-                ...savedSymptom._doc,
-                id: savedSymptom._id.toString(),
-                date: savedSymptom.date.toISOString()
-            };
+            return patientData.symptoms;
         },
 
-        // Create appointment
-        createAppointment: async (_, { patientId, nurseId, date, time, reason, notes, status }, { user }) => {
-            ensureAuthenticated(user);
-
-            if (user.role !== 'PATIENT' && user.role !== 'NURSE') {
-                throw new GraphQLError('Not authorized to create appointments');
-            }
-
-            // If user is a patient, they can only create appointments for themselves
-            if (user.role === 'PATIENT' && user.id !== patientId) {
-                throw new GraphQLError('Not authorized to create appointments for another patient');
-            }
-
-            // Find patient data
-            let patientData = await PatientData.findOne({ userId: patientId });
-
+        // [Nurse] Update the daily required information for a patient
+        updatePatientDailyInfoRequired: async (
+            _,
+            { patientId, pulseRate, bloodPressure, weight, temperature, respiratoryRate },
+            { user }
+        ) => {
+            ensureNurseAuthenticated(user);
+            let patientData = await PatientData.findOne({ user: patientId });
             if (!patientData) {
-                if (user.role === 'NURSE') {
-                    patientData = new PatientData({ userId: patientId });
-                } else {
-                    patientData = new PatientData({ userId: user.id });
-                }
+                // If patient data does not exist, create it.
+                patientData = new PatientData({ user: patientId, dailyInfoRequired: {} });
             }
-
-            // Create new appointment
-            const newAppointment = {
-                date,
-                time,
-                reason,
-                notes,
-                nurseId,
-                status: status || 'REQUESTED'
-            };
-
-            patientData.appointments.push(newAppointment);
-            await patientData.save();
-
-            // Return the newly created appointment
-            const savedAppointment = patientData.appointments[patientData.appointments.length - 1];
-            return {
-                ...savedAppointment._doc,
-                id: savedAppointment._id.toString()
-            };
-        },
-
-        // Update appointment status
-        updateAppointment: async (_, { id, patientId, status }, { user }) => {
-            ensureAuthenticated(user);
-
-            // Find patient data
-            const patientData = await PatientData.findOne(
-                patientId ? { userId: patientId } : { 'appointments._id': id }
-            );
-
-            if (!patientData) {
-                throw new GraphQLError('Patient data or appointment not found');
-            }
-
-            // Check permissions
-            if (user.role !== 'NURSE' && patientData.userId !== user.id) {
-                throw new GraphQLError('Not authorized to update this appointment');
-            }
-
-            // Find the appointment
-            const appointment = patientData.appointments.id(id);
-
-            if (!appointment) {
-                throw new GraphQLError('Appointment not found');
-            }
-
-            // Update status
-            appointment.status = status;
-            await patientData.save();
-
-            return {
-                ...appointment._doc,
-                id: appointment._id.toString()
-            };
-        },
-
-        // Update patient's required daily info (nurse only)
-        updatePatientDailyInfoRequired: async (_, { patientId, pulseRate, bloodPressure, weight, temperature, respiratoryRate }, { user }) => {
-            ensureAuthenticated(user);
-
-            if (user.role !== 'NURSE') {
-                throw new GraphQLError('Not authorized to update daily info requirements');
-            }
-
-            // Find patient data
-            let patientData = await PatientData.findOne({ userId: patientId });
-
-            if (!patientData) {
-                patientData = new PatientData({
-                    userId: patientId,
-                    dailyInfoRequired: {}
-                });
-            }
-
-            // Update required fields
             if (pulseRate !== undefined) patientData.dailyInfoRequired.pulseRate = pulseRate;
             if (bloodPressure !== undefined) patientData.dailyInfoRequired.bloodPressure = bloodPressure;
             if (weight !== undefined) patientData.dailyInfoRequired.weight = weight;
             if (temperature !== undefined) patientData.dailyInfoRequired.temperature = temperature;
             if (respiratoryRate !== undefined) patientData.dailyInfoRequired.respiratoryRate = respiratoryRate;
-
             await patientData.save();
-
             return formatId(patientData);
         },
-
-        // Add emergency contact
-        addEmergencyContact: async (_, { name, relationship, phone }, { user }) => {
-            ensurePatientAuthenticated(user);
-
-            // Find or create patient data
-            let patientData = await PatientData.findOne({ userId: user.id });
-
-            if (!patientData) {
-                patientData = new PatientData({ userId: user.id });
-            }
-
-            // Add emergency contact
-            patientData.emergencyContacts.push({
-                name,
-                relationship,
-                phone
-            });
-
-            await patientData.save();
-
-            return formatId(patientData);
-        },
-
-        // Add preferred nurse
-        addPreferredNurse: async (_, { nurseId }, { user }) => {
-            ensurePatientAuthenticated(user);
-
-            // Find or create patient data
-            let patientData = await PatientData.findOne({ userId: user.id });
-
-            if (!patientData) {
-                patientData = new PatientData({ userId: user.id });
-            }
-
-            // Check if nurse is already in preferred nurses
-            if (patientData.preferredNurses.includes(nurseId)) {
-                return formatId(patientData);
-            }
-
-            // Add nurse to preferred nurses
-            patientData.preferredNurses.push(nurseId);
-            await patientData.save();
-
-            return formatId(patientData);
-        }
     }
 };
 
-export default patientResolvers; 
+export default patientResolvers;

@@ -28,6 +28,7 @@ const resolvers = {
 
 const server = new ApolloServer({
     schema: buildSubgraphSchema([{ typeDefs, resolvers }]),
+    debug: true,
 });
 
 await server.start();
