@@ -34,6 +34,16 @@ const authLink = setContext((_, { headers }) => {
 const client = new ApolloClient({
   link: authLink.concat(httpLink),
   cache: new InMemoryCache(),
+  defaultOptions: {
+    watchQuery: {
+      fetchPolicy: 'network-only',
+      errorPolicy: 'all',
+    },
+    query: {
+      fetchPolicy: 'network-only',
+      errorPolicy: 'all',
+    },
+  },
 });
 
 // Initialize patient data mutation
@@ -41,7 +51,7 @@ const INITIALIZE_PATIENT_DATA = gql`
   mutation InitializePatientData {
     initializePatientData {
       id
-      userId
+      user
     }
   }
 `;
