@@ -35,9 +35,10 @@ const GET_PATIENT = gql`
 
 const GET_USER = gql`
   query GetUser($id: ID!) {
-    user(id: $id) {
+    userById(id: $id) {
       id
       userName
+      email
     }
   }
 `;
@@ -81,10 +82,12 @@ const ViewMedicalConditions = () => {
     
     try {
       // Convert boolean symptoms to 0/1 values for the prediction API
-      const payload = Object.keys(patient.symptoms).reduce((acc, key) => {
-        acc[key] = patient.symptoms[key] ? 1 : 0;
-        return acc;
-      }, {});
+      const payload = Object.keys(patient.symptoms)
+        .filter(key => key !== '__typename')
+        .reduce((acc, key) => {
+          acc[key] = patient.symptoms[key] ? 1 : 0;
+          return acc;
+        }, {});
       
       const response = await fetch('http://localhost:5000/predict', {
         method: 'POST',
@@ -134,7 +137,7 @@ const ViewMedicalConditions = () => {
         <Col>
           <Card className="shadow-sm">
             <Card.Body>
-              <Card.Title>Patient: {userData?.user?.userName || 'Unknown'}</Card.Title>
+              <Card.Title>Patient: {userData?.userById?.userName || 'Unknown'}</Card.Title>
               
               <Card.Subtitle className="mt-3 mb-3">Current Symptoms</Card.Subtitle>
               
@@ -148,16 +151,18 @@ const ViewMedicalConditions = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {Object.entries(patient.symptoms).map(([key, value]) => (
-                        <tr key={key}>
-                          <td>{formatSymptomName(key)}</td>
-                          <td>
-                            <Badge bg={value ? 'danger' : 'success'}>
-                              {getSymptomValue(value)}
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))}
+                      {Object.entries(patient.symptoms)
+                        .filter(([key]) => key !== '__typename')
+                        .map(([key, value]) => (
+                          <tr key={key}>
+                            <td>{formatSymptomName(key)}</td>
+                            <td>
+                              <Badge bg={value ? 'danger' : 'success'}>
+                                {getSymptomValue(value)}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
                     </tbody>
                   </Table>
                   

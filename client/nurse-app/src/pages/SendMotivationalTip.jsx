@@ -14,7 +14,7 @@ const GET_PATIENT = gql`
 
 const GET_USER = gql`
   query GetUser($id: ID!) {
-    user(id: $id) {
+    userById(id: $id) {
       id
       userName
     }
@@ -104,8 +104,18 @@ const SendMotivationalTip = () => {
   
   // Format date for display
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString();
+    if (!dateString) return '';
+    
+    try {
+      // Handle unix timestamp in milliseconds
+      const date = new Date(parseInt(dateString));
+      return date.toLocaleString();
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return dateString;
+    }
   };
+
 
   if (loading && !tips.length) {
     return <Container><p>Loading...</p></Container>;
@@ -131,7 +141,7 @@ const SendMotivationalTip = () => {
       
       <Card className="shadow-sm mb-4">
         <Card.Body>
-          <Card.Title>Send a tip to {userData?.user?.userName || 'Patient'}</Card.Title>
+          <Card.Title>Send a tip to {userData?.userById?.userName || 'Patient'}</Card.Title>
           
           {successMessage && <Alert variant="success">{successMessage}</Alert>}
           {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
@@ -164,12 +174,10 @@ const SendMotivationalTip = () => {
           
           {tips.length > 0 ? (
             <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-              {tips.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(tip => (
+              {[...tips].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(tip => (
                 <Card key={tip.id} className="mb-2" border="success">
-                  <Card.Body>
-                    <Card.Subtitle className="mb-2 text-muted">{formatDate(tip.createdAt)}</Card.Subtitle>
-                    <Card.Text>{tip.content}</Card.Text>
-                  </Card.Body>
+                  <Card.Subtitle className="mb-2 text-muted">{formatDate(tip.createdAt)}</Card.Subtitle>
+                  <Card.Text>{tip.content}</Card.Text>
                 </Card>
               ))}
             </div>

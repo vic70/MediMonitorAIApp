@@ -21,6 +21,7 @@ const typeDefs = gql`
     type Query {
         isLoggedIn: Boolean!
         user: User
+        userById(id: ID!): User
         users: [User]
     }
 
