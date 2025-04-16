@@ -8,6 +8,7 @@ A healthcare monitoring application built using a microservices architecture, en
 - npm or yarn
 - MongoDB (Make sure MongoDB is installed and running)
 - OpenAI API key for medical condition analysis
+- Python with Conda for the AI microservice
 
 ## Project Structure
 
@@ -16,6 +17,7 @@ A healthcare monitoring application built using a microservices architecture, en
   - `auth-microservice`: Handles user authentication and authorization
   - `patient-microservice`: Manages patient data, health records, and medical information
   - `nurse-microservice`: Manages nurse assignments, patient monitoring, and alerts
+  - `AI-microservice`: AI-powered symptom analysis and medical condition prediction
 
 - **Client**: Contains the frontend applications
   - `auth-app`: Authentication frontend for login/signup
@@ -54,6 +56,23 @@ A healthcare monitoring application built using a microservices architecture, en
    npm install
    npm run start:gateway
    ```
+
+3. Setting up the AI microservice:
+   ```bash
+   # AI Microservice
+   cd server/AI-microservice
+   
+   # Create a conda environment from the provided environment.yml file
+   conda env create -f environment.yml
+   
+   # Activate the conda environment
+   conda activate tf-flask-env
+   
+   # Start the Flask server
+   python flask-server.py
+   ```
+   
+   The AI microservice will run on http://localhost:5000 and provides a `/predict` endpoint for symptom analysis.
 
 ### Frontend Setup
 
@@ -106,9 +125,15 @@ http://localhost:3000
   - Respond to alerts
   - AI-assisted symptom analysis
 
+- **AI Analysis**:
+  - Symptom assessment and prediction using machine learning
+  - Analyzes patient symptoms for potential health conditions
+  - Provides risk assessment based on symptom patterns
+
 ## Notes
 
 - Make sure MongoDB is running before starting the backend services
 - The backend services must be running before starting the frontend applications
 - Each microservice uses its own database as specified in their respective `.env` files
-- The application uses JWT for authentication between services 
+- The application uses JWT for authentication between services
+- The AI microservice requires a working Python environment with TensorFlow 
