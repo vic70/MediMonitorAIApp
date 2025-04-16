@@ -1,9 +1,11 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import numpy as np
 import tensorflow as tf
 
 # Initialize Flask application
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Load the pre-trained model once on startup
 model = tf.keras.models.load_model("model.h5")  # adjust the path if needed
@@ -36,6 +38,8 @@ def preprocess_input(json_data, feature_order):
     Modify this function based on how your model expects the input.
     """
     
+    print('json_data in preprocess_input', json_data);
+    
     # Remove fields not used for prediction (e.g., 'label')
     data = {key: value for key, value in json_data.items() if key in feature_order}
     
@@ -53,10 +57,13 @@ def predict():
     # Get JSON payload from the incoming request
     data = request.get_json(force=True)
     
+    print('data in predict', data);
 
 
     # Preprocess the input data (adjust according to your model's input shape)
     processed_data = preprocess_input(data, features_order)
+    
+    print('processed_data in predict', processed_data);
     
     # Run model prediction
     prediction = model.predict(processed_data)
