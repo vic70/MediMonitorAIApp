@@ -104,8 +104,18 @@ const SendMotivationalTip = () => {
   
   // Format date for display
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString();
+    if (!dateString) return '';
+    
+    try {
+      // Handle unix timestamp in milliseconds
+      const date = new Date(parseInt(dateString));
+      return date.toLocaleString();
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return dateString;
+    }
   };
+
 
   if (loading && !tips.length) {
     return <Container><p>Loading...</p></Container>;
