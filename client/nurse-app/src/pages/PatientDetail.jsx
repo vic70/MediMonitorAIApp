@@ -4,7 +4,7 @@ import { Container, Row, Col, Card, Table, Button, Badge, Tab, Tabs, Alert } fro
 
 const GET_PATIENT = gql`
   query GetPatient($id: ID!) {
-    patientData(id: $id) {
+    patientDataByUserId(userId: $id) {
       id
       user
       dailyInfoRequired {
@@ -56,13 +56,18 @@ const GET_MOTIVATIONAL_TIPS = gql`
 
 const PatientDetail = () => {
   const { id } = useParams();
+
+  console.log(`id`, id);
   
   const { data: patientData, loading: patientLoading } = useQuery(GET_PATIENT, {
     variables: { id },
     skip: !id
   });
-  
-  const patient = patientData?.patientData;
+
+  console.log(`patientData in console.log`, patientData);
+  const patient = patientData?.patientDataByUserId;
+  console.log(`patient in console.log`, patient);
+
   
   const { data: userData, loading: userLoading } = useQuery(GET_USER, {
     variables: { id: patient?.user },
