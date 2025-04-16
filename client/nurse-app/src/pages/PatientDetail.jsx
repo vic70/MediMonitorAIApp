@@ -36,7 +36,7 @@ const GET_PATIENT = gql`
 
 const GET_USER = gql`
   query GetUser($id: ID!) {
-    user(id: $id) {
+    userById(id: $id) {
       id
       userName
       email
@@ -78,8 +78,14 @@ const PatientDetail = () => {
     variables: { patientId: id },
     skip: !id
   });
-  
-  const user = userData?.user;
+
+
+  const user = userData?.userById;
+
+  console.log(`userData in console.log`, userData);
+  console.log('user', user)
+
+
   const tips = tipsData?.motivationalTips || [];
   const dailyRecords = patient?.dailyRecords || [];
   const emergencyAlerts = patient?.emergencyAlerts || [];
@@ -172,7 +178,7 @@ const PatientDetail = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {dailyRecords.sort((a, b) => new Date(b.date) - new Date(a.date)).map(record => (
+                          {[...dailyRecords].sort((a, b) => new Date(b.date) - new Date(a.date)).map(record => (
                             <tr key={record.id}>
                               <td>{formatDate(record.date)}</td>
                               <td>{record.pulseRate || '-'}</td>
@@ -193,7 +199,7 @@ const PatientDetail = () => {
                 <Tab eventKey="alerts" title="Emergency Alerts">
                   {emergencyAlerts.length > 0 ? (
                     <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                      {emergencyAlerts.sort((a, b) => new Date(b.create_date) - new Date(a.create_date)).map(alert => (
+                      {[...emergencyAlerts].sort((a, b) => new Date(b.create_date) - new Date(a.create_date)).map(alert => (
                         <Alert key={alert.id} variant="danger" className="mb-2">
                           <div className="d-flex justify-content-between">
                             <strong>Emergency Alert</strong>
@@ -212,7 +218,7 @@ const PatientDetail = () => {
                 <Tab eventKey="tips" title="Motivational Tips">
                   {tips.length > 0 ? (
                     <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                      {tips.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(tip => (
+                      {[...tips].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(tip => (
                         <Card key={tip.id} className="mb-2">
                           <Card.Body>
                             <Card.Subtitle className="mb-2 text-muted">{formatDate(tip.createdAt)}</Card.Subtitle>
