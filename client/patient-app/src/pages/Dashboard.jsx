@@ -181,7 +181,7 @@ const Dashboard = () => {
           )}
           
           <Row className="mb-4">
-            <Col md={3}>
+            <Col md={4}>
               <Card className="shadow-sm h-100 text-center">
                 <Card.Body>
                   <Card.Title>Health Records</Card.Title>
@@ -196,7 +196,7 @@ const Dashboard = () => {
               </Card>
             </Col>
             
-            <Col md={3}>
+            <Col md={4}>
               <Card className="shadow-sm h-100 text-center">
                 <Card.Body>
                   <Card.Title>Emergency Alerts</Card.Title>
@@ -211,7 +211,7 @@ const Dashboard = () => {
               </Card>
             </Col>
             
-            <Col md={3}>
+            <Col md={4}>
               <Card className="shadow-sm h-100 text-center">
                 <Card.Body>
                   <Card.Title>Symptoms Tracking</Card.Title>
@@ -221,21 +221,6 @@ const Dashboard = () => {
                   </Card.Text>
                   <Link to="/symptoms" className="btn btn-warning w-100">
                     Track Symptoms
-                  </Link>
-                </Card.Body>
-              </Card>
-            </Col>
-
-            <Col md={3}>
-              <Card className="shadow-sm h-100 text-center">
-                <Card.Body>
-                  <Card.Title>AI Health Analysis</Card.Title>
-                  <i className="bi bi-robot display-4 mb-3"></i>
-                  <Card.Text>
-                    Get AI-powered insights about your health trends
-                  </Card.Text>
-                  <Link to="/ai-analysis" className="btn btn-info w-100">
-                    View Analysis
                   </Link>
                 </Card.Body>
               </Card>
