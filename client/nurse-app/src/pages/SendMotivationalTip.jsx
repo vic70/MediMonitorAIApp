@@ -5,7 +5,7 @@ import { useQuery, useMutation, gql } from '@apollo/client';
 
 const GET_PATIENT = gql`
   query GetPatient($id: ID!) {
-    patientData(id: $id) {
+    patientDataByUserId(userId: $id) {
       id
       user
     }
@@ -53,7 +53,7 @@ const SendMotivationalTip = () => {
     skip: !patientId
   });
   
-  const patient = patientData?.patientData;
+  const patient = patientData?.patientDataByUserId;
   
   const { data: userData, loading: userLoading } = useQuery(GET_USER, {
     variables: { id: patient?.user },
