@@ -1,22 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Container, Card, Form, Button, Alert } from 'react-bootstrap';
 import { useQuery, useMutation, gql } from '@apollo/client';
 
-const GET_NURSE = gql`
-  query GetNurse($userId: ID!) {
-    nurseByUserId(userId: $userId) {
-      id
-      patients
-    }
-  }
-`;
-
 const GET_PATIENT = gql`
   query GetPatient($id: ID!) {
-    patient(id: $id) {
+    patientData(id: $id) {
       id
-      userId
+      user
     }
   }
 `;
@@ -41,8 +32,8 @@ const GET_MOTIVATIONAL_TIPS = gql`
 `;
 
 const ADD_MOTIVATIONAL_TIP = gql`
-  mutation AddMotivationalTip($nurseId: ID!, $patientId: ID!, $content: String!) {
-    addMotivationalTip(nurseId: $nurseId, patientId: $patientId, content: $content) {
+  mutation AddMotivationalTip($patientId: ID!, $content: String!) {
+    addMotivationalTip(patientId: $patientId, content: $content) {
       id
       content
       createdAt
@@ -52,28 +43,21 @@ const ADD_MOTIVATIONAL_TIP = gql`
 
 const SendMotivationalTip = () => {
   const { id: patientId } = useParams();
-  const userId = localStorage.getItem('userId');
   
-  const [nurseId, setNurseId] = useState('');
   const [tipContent, setTipContent] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  
-  const { data: nurseData } = useQuery(GET_NURSE, {
-    variables: { userId },
-    skip: !userId
-  });
   
   const { data: patientData, loading: patientLoading } = useQuery(GET_PATIENT, {
     variables: { id: patientId },
     skip: !patientId
   });
   
-  const patient = patientData?.patient;
+  const patient = patientData?.patientData;
   
   const { data: userData, loading: userLoading } = useQuery(GET_USER, {
-    variables: { id: patient?.userId },
-    skip: !patient?.userId
+    variables: { id: patient?.user },
+    skip: !patient?.user
   });
   
   const { data: tipsData, loading: tipsLoading, refetch } = useQuery(GET_MOTIVATIONAL_TIPS, {
@@ -94,12 +78,6 @@ const SendMotivationalTip = () => {
     }
   });
   
-  useEffect(() => {
-    if (nurseData?.nurseByUserId) {
-      setNurseId(nurseData.nurseByUserId.id);
-    }
-  }, [nurseData]);
-  
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -112,7 +90,6 @@ const SendMotivationalTip = () => {
     try {
       await addMotivationalTip({
         variables: {
-          nurseId,
           patientId,
           content: tipContent
         }
@@ -173,7 +150,7 @@ const SendMotivationalTip = () => {
             </Form.Group>
             
             <div className="d-grid">
-              <Button variant="success" type="submit" disabled={addingTip || !nurseId}>
+              <Button variant="success" type="submit" disabled={addingTip}>
                 {addingTip ? 'Sending...' : 'Send Tip'}
               </Button>
             </div>

@@ -40,7 +40,7 @@ const INITIALIZE_NURSE_DATA = gql`
   mutation InitializeNurseData {
     initializeNurseData {
       id
-      userId
+      user
     }
   }
 `;

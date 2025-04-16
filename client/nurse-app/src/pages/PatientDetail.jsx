@@ -4,9 +4,9 @@ import { Container, Row, Col, Card, Table, Button, Badge, Tab, Tabs, Alert } fro
 
 const GET_PATIENT = gql`
   query GetPatient($id: ID!) {
-    patient(id: $id) {
+    patientData(id: $id) {
       id
-      userId
+      user
       dailyInfoRequired {
         pulseRate
         bloodPressure
@@ -23,16 +23,10 @@ const GET_PATIENT = gql`
         temperature
         respiratoryRate
       }
-      symptoms {
-        id
-        date
-        symptoms
-        notes
-      }
       emergencyAlerts {
         id
         content
-        createdAt
+        create_date
       }
       createdAt
       updatedAt
@@ -68,11 +62,11 @@ const PatientDetail = () => {
     skip: !id
   });
   
-  const patient = patientData?.patient;
+  const patient = patientData?.patientData;
   
   const { data: userData, loading: userLoading } = useQuery(GET_USER, {
-    variables: { id: patient?.userId },
-    skip: !patient?.userId
+    variables: { id: patient?.user },
+    skip: !patient?.user
   });
   
   const { data: tipsData, loading: tipsLoading } = useQuery(GET_MOTIVATIONAL_TIPS, {
@@ -83,7 +77,6 @@ const PatientDetail = () => {
   const user = userData?.user;
   const tips = tipsData?.motivationalTips || [];
   const dailyRecords = patient?.dailyRecords || [];
-  const symptoms = patient?.symptoms || [];
   const emergencyAlerts = patient?.emergencyAlerts || [];
   
   const loading = patientLoading || userLoading || tipsLoading;
@@ -192,45 +185,14 @@ const PatientDetail = () => {
                   )}
                 </Tab>
                 
-                <Tab eventKey="symptoms" title="Symptoms">
-                  {symptoms.length > 0 ? (
-                    <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                      <Table striped hover responsive>
-                        <thead>
-                          <tr>
-                            <th>Date</th>
-                            <th>Symptoms</th>
-                            <th>Notes</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {symptoms.sort((a, b) => new Date(b.date) - new Date(a.date)).map(symptom => (
-                            <tr key={symptom.id}>
-                              <td>{formatDate(symptom.date)}</td>
-                              <td>
-                                {symptom.symptoms.map((s, i) => (
-                                  <Badge key={i} bg="danger" className="me-1 mb-1">{s}</Badge>
-                                ))}
-                              </td>
-                              <td>{symptom.notes || '-'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </Table>
-                    </div>
-                  ) : (
-                    <p className="text-center my-4">No symptoms reported</p>
-                  )}
-                </Tab>
-                
                 <Tab eventKey="alerts" title="Emergency Alerts">
                   {emergencyAlerts.length > 0 ? (
                     <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                      {emergencyAlerts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(alert => (
+                      {emergencyAlerts.sort((a, b) => new Date(b.create_date) - new Date(a.create_date)).map(alert => (
                         <Alert key={alert.id} variant="danger" className="mb-2">
                           <div className="d-flex justify-content-between">
                             <strong>Emergency Alert</strong>
-                            <small>{formatDate(alert.createdAt)}</small>
+                            <small>{formatDate(alert.create_date)}</small>
                           </div>
                           <hr />
                           <p>{alert.content}</p>
