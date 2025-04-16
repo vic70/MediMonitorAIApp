@@ -82,7 +82,7 @@ const Dashboard = () => {
         </Col>
       </Row>
       
-      <Row>
+      {/*<Row>
         <Col>
           <Card className="shadow-sm">
             <Card.Body>
@@ -107,7 +107,7 @@ const Dashboard = () => {
             </Card.Body>
           </Card>
         </Col>
-      </Row>
+      </Row>*/}
     </Container>
   );
 };
