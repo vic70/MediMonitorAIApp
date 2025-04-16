@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Container, Card, Form, Button, Alert, ListGroup, Badge } from 'react-bootstrap';
 import { useMutation, useQuery, gql } from '@apollo/client';
+import { jwtDecode } from 'jwt-decode';
 
 const GET_PATIENT_SYMPTOMS = gql`
   query GetPatientSymptoms($patientId: ID!) {
@@ -83,13 +84,17 @@ const SYMPTOM_MAPPING = {
 // Common symptoms (display names)
 const SYMPTOM_OPTIONS = Object.keys(SYMPTOM_MAPPING);
 
-const SymptomsList = ({ patientId }) => {
+const SymptomsList = () => {
   const [selectedSymptoms, setSelectedSymptoms] = useState([]);
-  const [customSymptom, setCustomSymptom] = useState('');
+  const token = localStorage.getItem('authToken');
+  const decodedToken = token ? jwtDecode(token) : null;
+  const userId = decodedToken?.id;
+
   const [addSymptom, { loading: submitting, error }] = useMutation(ADD_SYMPTOM);
   const { data, loading, refetch } = useQuery(GET_PATIENT_SYMPTOMS, { 
-    variables: { patientId },
-    fetchPolicy: 'network-only'
+    variables: { patientId: userId },
+    fetchPolicy: 'cache-and-network',
+    skip: !userId
   });
 
   // Initialize selected symptoms from database data
@@ -97,10 +102,10 @@ const SymptomsList = ({ patientId }) => {
     if (data?.patientSymptoms) {
       const activeSymptoms = [];
       
-      // Loop through the database symptoms
+      // Loop through the database symptoms and find active ones
       Object.entries(data.patientSymptoms).forEach(([key, value]) => {
         if (value === true) {  // If the symptom is true
-          // Find the display name for this database key
+          // Find the display name for this database key by reversing the SYMPTOM_MAPPING
           const displayName = Object.entries(SYMPTOM_MAPPING).find(([_, dbKey]) => dbKey === key)?.[0];
           if (displayName) {
             activeSymptoms.push(displayName);
@@ -110,20 +115,23 @@ const SymptomsList = ({ patientId }) => {
       
       setSelectedSymptoms(activeSymptoms);
     }
-  }, [data]);
+  }, [data?.patientSymptoms]); // Only re-run when patientSymptoms changes
 
   const handleSymptomToggle = async (symptom) => {
     const updatedSymptoms = selectedSymptoms.includes(symptom)
       ? selectedSymptoms.filter((s) => s !== symptom)
       : [...selectedSymptoms, symptom];
     
+    // Update local state immediately for better UX
     setSelectedSymptoms(updatedSymptoms);
 
     // Create symptoms input object with all symptoms initialized as false
-    const symptomsInput = Object.values(SYMPTOM_MAPPING).reduce((acc, key) => {
-      acc[key] = false;
-      return acc;
-    }, {});
+    const symptomsInput = {};
+    
+    // Initialize all symptoms as false first
+    Object.values(SYMPTOM_MAPPING).forEach(key => {
+      symptomsInput[key] = false;
+    });
 
     // Set selected symptoms to true
     updatedSymptoms.forEach(displayName => {
@@ -134,22 +142,21 @@ const SymptomsList = ({ patientId }) => {
     });
 
     try {
-      await addSymptom({ 
+      const result = await addSymptom({ 
         variables: { 
           symptoms: symptomsInput
         }
       });
-      // Refetch to ensure we have the latest data
-      await refetch();
+      
+      // Verify the mutation was successful
+      if (result.data?.addSymptom) {
+        // Refetch to ensure we have the latest data
+        await refetch();
+      }
     } catch (error) {
       console.error('Error updating symptoms:', error);
-    }
-  };
-
-  const handleAddCustomSymptom = () => {
-    if (customSymptom.trim() && !selectedSymptoms.includes(customSymptom.trim())) {
-      setSelectedSymptoms([...selectedSymptoms, customSymptom.trim()]);
-      setCustomSymptom('');
+      // Revert the local state if the mutation failed
+      setSelectedSymptoms(selectedSymptoms);
     }
   };
 
@@ -173,20 +180,6 @@ const SymptomsList = ({ patientId }) => {
                     {symptom}
                   </Badge>
                 ))}
-              </div>
-            </Form.Group>
-            <Form.Group className="mt-3">
-              <Form.Label>Other Symptoms</Form.Label>
-              <div className="d-flex">
-                <Form.Control
-                  type="text"
-                  value={customSymptom}
-                  onChange={(e) => setCustomSymptom(e.target.value)}
-                  placeholder="Enter custom symptom"
-                />
-                <Button variant="outline-primary" onClick={handleAddCustomSymptom}>
-                  Add
-                </Button>
               </div>
             </Form.Group>
           </Form>
