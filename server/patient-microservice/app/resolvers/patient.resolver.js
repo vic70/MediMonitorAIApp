@@ -252,7 +252,7 @@ const patientResolvers = {
             let patientData = await PatientData.findOne({ user: user.id });
             if (!patientData) {
                 // Create new patient data with default symptoms
-                patientData = new PatientData({ 
+                patientData = new PatientData({
                     user: user.id,
                     symptoms: {} // This will be initialized with default values from the schema
                 });

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, gql } from '@apollo/client';
 import { Form, Button, Alert, Table, Container, Card } from 'react-bootstrap';
+import formatDate from '../util/formatDate';
 
 const GET_PATIENT_DATA = gql`
   query GetPatientData($userId: ID!) {
@@ -159,7 +160,7 @@ const EmergencyAlert = () => {
               <tbody>
                 {alerts.sort((a, b) => new Date(b.create_date) - new Date(a.create_date)).map(alert => (
                   <tr key={alert.id}>
-                    <td>{new Date(alert.create_date).toLocaleString()}</td>
+                    <td>{formatDate(alert.create_date)}</td>
                     <td>{alert.content}</td>
                   </tr>
                 ))}
