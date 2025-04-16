@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card, Row, Col, Container, Alert, Button } from 'react-bootstrap';
 import { useQuery, gql } from '@apollo/client';
 import { Link } from 'react-router-dom';
+import  formatDate from '../util/formatDate';
 
 const GET_PATIENT_DATA = gql`
   query GetPatientData($userId: ID!) {
@@ -67,7 +68,7 @@ const GET_MOTIVATIONAL_TIPS = gql`
     motivationalTips(patientId: $patientId) {
       id
       content
-      create_date
+      createdAt
     }
   }
 `;
@@ -135,8 +136,8 @@ const Dashboard = () => {
   console.log('Error states:', { patientError, alertsError });
   
   const { data: tipsData, loading: tipsLoading } = useQuery(GET_MOTIVATIONAL_TIPS, {
-    variables: { patientId },
-    skip: !patientId
+    variables: { patientId: userId },
+    skip: !userId
   });
   
   // Get most recent record date
@@ -286,7 +287,7 @@ const Dashboard = () => {
                       {recentTips.map(tip => (
                         <Alert key={tip.id} variant="success" className="mb-2">
                           <small className="text-muted d-block mb-1">
-                            {new Date(tip.create_date).toLocaleString()}
+                            {formatDate(tip.createdAt)}
                           </small>
                           {tip.content}
                         </Alert>

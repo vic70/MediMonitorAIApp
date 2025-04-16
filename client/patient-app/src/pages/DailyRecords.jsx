@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, gql } from '@apollo/client';
 import { Form, Button, Alert, Container, Table } from 'react-bootstrap';
-
+import formatDate from '../util/formatDate';
 const GET_DAILY_RECORDS = gql`
   query GetDailyRecords($userId: ID!) {
     patientDataByUserId(userId: $userId) {
@@ -124,19 +124,6 @@ const DailyRecords = () => {
       });
     } catch (err) {
       console.error('Error submitting record:', err);
-    }
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    
-    try {
-      // Handle unix timestamp in milliseconds
-      const date = new Date(parseInt(dateString));
-      return date.toLocaleString();
-    } catch (error) {
-      console.error("Error formatting date:", error);
-      return dateString;
     }
   };
 
