@@ -95,12 +95,6 @@ const typeDefs = gql`
             symptoms: SymptomsInput!
         ): Symptoms
 
-        reportSymptoms(
-            patientId: ID!
-            symptoms: [String]!
-            notes: String
-        ): PatientData
-
         updatePatientDailyInfoRequired(
             patientId: ID!,
             pulseRate: Boolean,
