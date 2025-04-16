@@ -57,6 +57,29 @@ const userResolvers = {
                 return null;
             }
         },
+        userById: async (_, { id }, { req }) => {
+            // Get token from Authorization header
+            const authHeader = req.headers.authorization;
+            if (!authHeader || !authHeader.startsWith('Bearer ')) {
+                throw new Error('Authentication required');
+            }
+
+            const token = authHeader.split(' ')[1];
+
+            try {
+                const decoded = jwt.verify(token, JWT_SECRET);
+
+                // Only allow nurses to fetch any user, or users to fetch themselves
+                if (decoded.role !== 'NURSE' && decoded.id !== id) {
+                    throw new Error('Not authorized to access this user');
+                }
+
+                return await User.findById(id);
+            } catch (error) {
+                console.error(`[Auth Service] Error in userById resolver:`, error);
+                throw error;
+            }
+        },
         users: async (_, __, { req }) => {
             console.log(`[Auth Service] Resolving users. Req object received: ${req ? 'Yes' : 'No'}`);
 

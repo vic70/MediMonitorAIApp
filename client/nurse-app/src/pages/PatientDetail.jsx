@@ -78,8 +78,14 @@ const PatientDetail = () => {
     variables: { patientId: id },
     skip: !id
   });
-  
-  const user = userData?.user;
+
+
+  const user = userData?.userById;
+
+  console.log(`userData in console.log`, userData);
+  console.log('user', user)
+
+
   const tips = tipsData?.motivationalTips || [];
   const dailyRecords = patient?.dailyRecords || [];
   const emergencyAlerts = patient?.emergencyAlerts || [];

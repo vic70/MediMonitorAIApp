@@ -134,7 +134,7 @@ const ViewMedicalConditions = () => {
         <Col>
           <Card className="shadow-sm">
             <Card.Body>
-              <Card.Title>Patient: {userData?.user?.userName || 'Unknown'}</Card.Title>
+              <Card.Title>Patient: {userData?.userById?.userName || 'Unknown'}</Card.Title>
               
               <Card.Subtitle className="mt-3 mb-3">Current Symptoms</Card.Subtitle>
               
