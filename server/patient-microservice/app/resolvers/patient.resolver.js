@@ -136,7 +136,31 @@ const patientResolvers = {
         patientSymptoms: async (_, { patientId }, { user }) => {
             ensureAuthenticated(user);
             const patientData = await PatientData.findOne({ user: patientId });
-            if (!patientData) return null;
+            if (!patientData) {
+                // Return default symptoms if patient data doesn't exist
+                return {
+                    breathingProblem: false,
+                    fever: false,
+                    dryCough: false,
+                    soreThroat: false,
+                    runningNose: false,
+                    asthma: false,
+                    chronicLungDisease: false,
+                    headache: false,
+                    heartDisease: false,
+                    diabetes: false,
+                    hyperTension: false,
+                    fatigue: false,
+                    gastrointestinal: false,
+                    abroadTravel: false,
+                    contactWithCovidPatient: false,
+                    attendedLargeGathering: false,
+                    visitedPublicExposedPlaces: false,
+                    familyWorkingInPublicExposedPlaces: false,
+                    wearingMasks: false,
+                    sanitizationFromMarket: false
+                };
+            }
             // Only allow access if user is a nurse or the patient themselves.
             if (user.role !== 'NURSE' && user.id !== patientId) {
                 throw new GraphQLError('Not authorized to view this patient\'s symptoms');
@@ -227,9 +251,13 @@ const patientResolvers = {
             ensurePatientAuthenticated(user);
             let patientData = await PatientData.findOne({ user: user.id });
             if (!patientData) {
-                patientData = new PatientData({ user: user.id });
+                // Create new patient data with default symptoms
+                patientData = new PatientData({ 
+                    user: user.id,
+                    symptoms: {} // This will be initialized with default values from the schema
+                });
             }
-            // Update the symptoms field with the provided checklist.
+            // Update the symptoms field with the provided checklist
             patientData.symptoms = { ...symptoms };
             await patientData.save();
             return patientData.symptoms;
