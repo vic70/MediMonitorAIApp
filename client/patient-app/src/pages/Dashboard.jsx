@@ -141,7 +141,7 @@ const Dashboard = () => {
   
   // Get most recent record date
   const lastRecordDate = patientData?.patientDataByUserId?.dailyRecords?.length > 0 
-    ? new Date(patientData.patientDataByUserId.dailyRecords
+    ? new Date([...patientData.patientDataByUserId.dailyRecords]
         .sort((a, b) => new Date(b.date) - new Date(a.date))[0].date)
     : null;
   

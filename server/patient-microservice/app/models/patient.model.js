@@ -57,7 +57,7 @@ const DailyRecordSchema = new Schema({
     bloodPressure: { type: Number },
     weight: { type: Number },
     temperature: { type: Number },
-    respiratoryRate: { type: Number },
+    respiratoryRate: { type: Number }
 });
 
 // Main Patient Schema connecting the User to their patient data

@@ -13,7 +13,6 @@ const GET_DAILY_RECORDS = gql`
         weight
         temperature
         respiratoryRate
-        notes
       }
     }
   }
@@ -23,11 +22,10 @@ const ADD_DAILY_RECORD = gql`
   mutation AddDailyRecord(
     $date: String!,
     $pulseRate: Float,
-    $bloodPressure: String,
+    $bloodPressure: Float,
     $weight: Float,
     $temperature: Float,
-    $respiratoryRate: Float,
-    $notes: String
+    $respiratoryRate: Float
   ) {
     addDailyRecord(
       date: $date,
@@ -35,8 +33,7 @@ const ADD_DAILY_RECORD = gql`
       bloodPressure: $bloodPressure,
       weight: $weight,
       temperature: $temperature,
-      respiratoryRate: $respiratoryRate,
-      notes: $notes
+      respiratoryRate: $respiratoryRate
     ) {
       id
       date
@@ -45,7 +42,6 @@ const ADD_DAILY_RECORD = gql`
       weight
       temperature
       respiratoryRate
-      notes
     }
   }
 `;
@@ -57,8 +53,7 @@ const DailyRecords = () => {
     bloodPressure: '',
     weight: '',
     temperature: '',
-    respiratoryRate: '',
-    notes: ''
+    respiratoryRate: ''
   });
 
   // Get user data from localStorage
@@ -101,12 +96,11 @@ const DailyRecords = () => {
     
     try {
       const variables = {
-        date: formData.date,
-        notes: formData.notes || undefined
+        date: formData.date
       };
 
       if (formData.pulseRate) variables.pulseRate = parseFloat(formData.pulseRate);
-      if (formData.bloodPressure) variables.bloodPressure = formData.bloodPressure;
+      if (formData.bloodPressure) variables.bloodPressure = parseFloat(formData.bloodPressure);
       if (formData.weight) variables.weight = parseFloat(formData.weight);
       if (formData.temperature) variables.temperature = parseFloat(formData.temperature);
       if (formData.respiratoryRate) variables.respiratoryRate = parseFloat(formData.respiratoryRate);
@@ -126,8 +120,7 @@ const DailyRecords = () => {
         bloodPressure: '',
         weight: '',
         temperature: '',
-        respiratoryRate: '',
-        notes: ''
+        respiratoryRate: ''
       });
     } catch (err) {
       console.error('Error submitting record:', err);
@@ -213,17 +206,6 @@ const DailyRecords = () => {
           />
         </Form.Group>
 
-        <Form.Group className="mb-3" controlId="notes">
-          <Form.Label>Additional Notes</Form.Label>
-          <Form.Control
-            as="textarea"
-            rows={3}
-            name="notes"
-            value={formData.notes}
-            onChange={handleChange}
-          />
-        </Form.Group>
-
         <Button variant="primary" type="submit" disabled={submitLoading}>
           {submitLoading ? 'Submitting...' : 'Submit Record'}
         </Button>
@@ -242,7 +224,6 @@ const DailyRecords = () => {
               <th>Weight (kg)</th>
               <th>Temperature (°C)</th>
               <th>Respiratory Rate</th>
-              <th>Notes</th>
             </tr>
           </thead>
           <tbody>
@@ -254,7 +235,6 @@ const DailyRecords = () => {
                 <td>{record.weight || '-'}</td>
                 <td>{record.temperature || '-'}</td>
                 <td>{record.respiratoryRate || '-'}</td>
-                <td>{record.notes || '-'}</td>
               </tr>
             ))}
           </tbody>
