@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card, Row, Col, Container, Alert, Button } from 'react-bootstrap';
 import { useQuery, gql } from '@apollo/client';
 import { Link } from 'react-router-dom';
+import  formatDate from '../util/formatDate';
 
 const GET_PATIENT_DATA = gql`
   query GetPatientData($userId: ID!) {
@@ -67,7 +68,7 @@ const GET_MOTIVATIONAL_TIPS = gql`
     motivationalTips(patientId: $patientId) {
       id
       content
-      create_date
+      createdAt
     }
   }
 `;
@@ -135,8 +136,8 @@ const Dashboard = () => {
   console.log('Error states:', { patientError, alertsError });
   
   const { data: tipsData, loading: tipsLoading } = useQuery(GET_MOTIVATIONAL_TIPS, {
-    variables: { patientId },
-    skip: !patientId
+    variables: { patientId: userId },
+    skip: !userId
   });
   
   // Get most recent record date
@@ -180,7 +181,7 @@ const Dashboard = () => {
           )}
           
           <Row className="mb-4">
-            <Col md={3}>
+            <Col md={4}>
               <Card className="shadow-sm h-100 text-center">
                 <Card.Body>
                   <Card.Title>Health Records</Card.Title>
@@ -195,7 +196,7 @@ const Dashboard = () => {
               </Card>
             </Col>
             
-            <Col md={3}>
+            <Col md={4}>
               <Card className="shadow-sm h-100 text-center">
                 <Card.Body>
                   <Card.Title>Emergency Alerts</Card.Title>
@@ -210,7 +211,7 @@ const Dashboard = () => {
               </Card>
             </Col>
             
-            <Col md={3}>
+            <Col md={4}>
               <Card className="shadow-sm h-100 text-center">
                 <Card.Body>
                   <Card.Title>Symptoms Tracking</Card.Title>
@@ -220,21 +221,6 @@ const Dashboard = () => {
                   </Card.Text>
                   <Link to="/symptoms" className="btn btn-warning w-100">
                     Track Symptoms
-                  </Link>
-                </Card.Body>
-              </Card>
-            </Col>
-
-            <Col md={3}>
-              <Card className="shadow-sm h-100 text-center">
-                <Card.Body>
-                  <Card.Title>AI Health Analysis</Card.Title>
-                  <i className="bi bi-robot display-4 mb-3"></i>
-                  <Card.Text>
-                    Get AI-powered insights about your health trends
-                  </Card.Text>
-                  <Link to="/ai-analysis" className="btn btn-info w-100">
-                    View Analysis
                   </Link>
                 </Card.Body>
               </Card>
@@ -286,7 +272,7 @@ const Dashboard = () => {
                       {recentTips.map(tip => (
                         <Alert key={tip.id} variant="success" className="mb-2">
                           <small className="text-muted d-block mb-1">
-                            {new Date(tip.create_date).toLocaleString()}
+                            {formatDate(tip.createdAt)}
                           </small>
                           {tip.content}
                         </Alert>

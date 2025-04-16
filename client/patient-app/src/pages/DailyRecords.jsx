@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, gql } from '@apollo/client';
 import { Form, Button, Alert, Container, Table } from 'react-bootstrap';
+import formatDate from '../util/formatDate';
 
-const GET_DAILY_RECORDS = gql`
-  query GetDailyRecords($userId: ID!) {
+const GET_PATIENT_INFO = gql`
+  query GetPatientInfo($userId: ID!) {
     patientDataByUserId(userId: $userId) {
       dailyRecords {
         id
@@ -14,6 +15,13 @@ const GET_DAILY_RECORDS = gql`
         temperature
         respiratoryRate
       }
+    }
+    patientDailyInfoRequired(patientId: $userId) {
+      pulseRate
+      bloodPressure
+      weight
+      temperature
+      respiratoryRate
     }
   }
 `;
@@ -56,16 +64,29 @@ const DailyRecords = () => {
     respiratoryRate: ''
   });
 
+  const [requiredInfo, setRequiredInfo] = useState({
+    pulseRate: true,
+    bloodPressure: true,
+    weight: true,
+    temperature: true,
+    respiratoryRate: true
+  });
+
   // Get user data from localStorage
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const userId = user.id;
   console.log('Current userId from localStorage:', userId);
 
-  const { data: recordsData, loading: recordsLoading, error: queryError, refetch } = useQuery(GET_DAILY_RECORDS, {
+  const { data, loading: recordsLoading, error: queryError, refetch } = useQuery(GET_PATIENT_INFO, {
     variables: { userId },
     skip: !userId,
     onCompleted: (data) => {
       console.log('Query completed. Received data:', data);
+      
+      // Set required info when data loads
+      if (data?.patientDailyInfoRequired) {
+        setRequiredInfo(data.patientDailyInfoRequired);
+      }
     },
     onError: (error) => {
       console.error('Query error:', error);
@@ -73,8 +94,11 @@ const DailyRecords = () => {
   });
 
   useEffect(() => {
-    console.log('Records data updated:', recordsData);
-  }, [recordsData]);
+    console.log('Patient info updated:', data);
+    if (data?.patientDailyInfoRequired) {
+      setRequiredInfo(data.patientDailyInfoRequired);
+    }
+  }, [data]);
 
   const [addRecord, { loading: submitLoading, error }] = useMutation(ADD_DAILY_RECORD, {
     onError: (error) => {
@@ -95,15 +119,21 @@ const DailyRecords = () => {
     e.preventDefault();
     
     try {
+      // Fix timezone issue by constructing a date with time set to noon
+      // This prevents date shifting due to timezone issues
+      const formDate = new Date(formData.date);
+      formDate.setHours(12, 0, 0, 0); // Set to noon
+
       const variables = {
-        date: formData.date
+        date: formDate.toISOString()
       };
 
-      if (formData.pulseRate) variables.pulseRate = parseFloat(formData.pulseRate);
-      if (formData.bloodPressure) variables.bloodPressure = parseFloat(formData.bloodPressure);
-      if (formData.weight) variables.weight = parseFloat(formData.weight);
-      if (formData.temperature) variables.temperature = parseFloat(formData.temperature);
-      if (formData.respiratoryRate) variables.respiratoryRate = parseFloat(formData.respiratoryRate);
+      // Only include fields that are required or have values
+      if (requiredInfo.pulseRate && formData.pulseRate) variables.pulseRate = parseFloat(formData.pulseRate);
+      if (requiredInfo.bloodPressure && formData.bloodPressure) variables.bloodPressure = parseFloat(formData.bloodPressure);
+      if (requiredInfo.weight && formData.weight) variables.weight = parseFloat(formData.weight);
+      if (requiredInfo.temperature && formData.temperature) variables.temperature = parseFloat(formData.temperature);
+      if (requiredInfo.respiratoryRate && formData.respiratoryRate) variables.respiratoryRate = parseFloat(formData.respiratoryRate);
 
       console.log('Submitting variables:', variables);
 
@@ -124,19 +154,6 @@ const DailyRecords = () => {
       });
     } catch (err) {
       console.error('Error submitting record:', err);
-    }
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    
-    try {
-      // Handle unix timestamp in milliseconds
-      const date = new Date(parseInt(dateString));
-      return date.toLocaleString();
-    } catch (error) {
-      console.error("Error formatting date:", error);
-      return dateString;
     }
   };
 
@@ -163,58 +180,73 @@ const DailyRecords = () => {
           />
         </Form.Group>
 
-        <Form.Group className="mb-3" controlId="pulseRate">
-          <Form.Label>Pulse Rate (bpm)</Form.Label>
-          <Form.Control
-            type="number"
-            name="pulseRate"
-            value={formData.pulseRate}
-            onChange={handleChange}
-          />
-        </Form.Group>
+        {requiredInfo.pulseRate && (
+          <Form.Group className="mb-3" controlId="pulseRate">
+            <Form.Label>Pulse Rate (bpm)</Form.Label>
+            <Form.Control
+              type="number"
+              name="pulseRate"
+              value={formData.pulseRate}
+              onChange={handleChange}
+              required
+            />
+          </Form.Group>
+        )}
 
-        <Form.Group className="mb-3" controlId="bloodPressure">
-          <Form.Label>Blood Pressure (mmHg)</Form.Label>
-          <Form.Control
-            type="text"
-            name="bloodPressure"
-            value={formData.bloodPressure}
-            onChange={handleChange}
-            placeholder="e.g., 120/80"
-          />
-        </Form.Group>
+        {requiredInfo.bloodPressure && (
+          <Form.Group className="mb-3" controlId="bloodPressure">
+            <Form.Label>Blood Pressure (mmHg)</Form.Label>
+            <Form.Control
+              type="text"
+              name="bloodPressure"
+              value={formData.bloodPressure}
+              onChange={handleChange}
+              placeholder="e.g., 120"
+              required
+            />
+          </Form.Group>
+        )}
 
-        <Form.Group className="mb-3" controlId="weight">
-          <Form.Label>Weight (kg)</Form.Label>
-          <Form.Control
-            type="number"
-            step="0.1"
-            name="weight"
-            value={formData.weight}
-            onChange={handleChange}
-          />
-        </Form.Group>
+        {requiredInfo.weight && (
+          <Form.Group className="mb-3" controlId="weight">
+            <Form.Label>Weight (kg)</Form.Label>
+            <Form.Control
+              type="number"
+              step="0.1"
+              name="weight"
+              value={formData.weight}
+              onChange={handleChange}
+              required
+            />
+          </Form.Group>
+        )}
 
-        <Form.Group className="mb-3" controlId="temperature">
-          <Form.Label>Temperature (°C)</Form.Label>
-          <Form.Control
-            type="number"
-            step="0.1"
-            name="temperature"
-            value={formData.temperature}
-            onChange={handleChange}
-          />
-        </Form.Group>
+        {requiredInfo.temperature && (
+          <Form.Group className="mb-3" controlId="temperature">
+            <Form.Label>Temperature (°C)</Form.Label>
+            <Form.Control
+              type="number"
+              step="0.1"
+              name="temperature"
+              value={formData.temperature}
+              onChange={handleChange}
+              required
+            />
+          </Form.Group>
+        )}
 
-        <Form.Group className="mb-3" controlId="respiratoryRate">
-          <Form.Label>Respiratory Rate (breaths per minute)</Form.Label>
-          <Form.Control
-            type="number"
-            name="respiratoryRate"
-            value={formData.respiratoryRate}
-            onChange={handleChange}
-          />
-        </Form.Group>
+        {requiredInfo.respiratoryRate && (
+          <Form.Group className="mb-3" controlId="respiratoryRate">
+            <Form.Label>Respiratory Rate (breaths per minute)</Form.Label>
+            <Form.Control
+              type="number"
+              name="respiratoryRate"
+              value={formData.respiratoryRate}
+              onChange={handleChange}
+              required
+            />
+          </Form.Group>
+        )}
 
         <Button variant="primary" type="submit" disabled={submitLoading}>
           {submitLoading ? 'Submitting...' : 'Submit Record'}
@@ -224,27 +256,27 @@ const DailyRecords = () => {
       <h3 className="mb-4">Your Daily Records</h3>
       {recordsLoading ? (
         <p>Loading records...</p>
-      ) : recordsData?.patientDataByUserId?.dailyRecords?.length > 0 ? (
+      ) : data?.patientDataByUserId?.dailyRecords?.length > 0 ? (
         <Table striped bordered hover responsive>
           <thead>
             <tr>
               <th>Date</th>
-              <th>Pulse Rate (bpm)</th>
-              <th>Blood Pressure</th>
-              <th>Weight (kg)</th>
-              <th>Temperature (°C)</th>
-              <th>Respiratory Rate</th>
+              {requiredInfo.pulseRate && <th>Pulse Rate (bpm)</th>}
+              {requiredInfo.bloodPressure && <th>Blood Pressure</th>}
+              {requiredInfo.weight && <th>Weight (kg)</th>}
+              {requiredInfo.temperature && <th>Temperature (°C)</th>}
+              {requiredInfo.respiratoryRate && <th>Respiratory Rate</th>}
             </tr>
           </thead>
           <tbody>
-            {recordsData.patientDataByUserId.dailyRecords.map((record) => (
+            {data.patientDataByUserId.dailyRecords.map((record) => (
               <tr key={record.id}>
-                <td>{formatDate(record.date)}</td>
-                <td>{record.pulseRate || '-'}</td>
-                <td>{record.bloodPressure || '-'}</td>
-                <td>{record.weight || '-'}</td>
-                <td>{record.temperature || '-'}</td>
-                <td>{record.respiratoryRate || '-'}</td>
+                <td>{formatDate(record.date).split(',')[0]}</td>
+                {requiredInfo.pulseRate && <td>{record.pulseRate || '-'}</td>}
+                {requiredInfo.bloodPressure && <td>{record.bloodPressure || '-'}</td>}
+                {requiredInfo.weight && <td>{record.weight || '-'}</td>}
+                {requiredInfo.temperature && <td>{record.temperature || '-'}</td>}
+                {requiredInfo.respiratoryRate && <td>{record.respiratoryRate || '-'}</td>}
               </tr>
             ))}
           </tbody>

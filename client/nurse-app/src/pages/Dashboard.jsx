@@ -1,6 +1,7 @@
 import { Card, Row, Col, Container, Alert } from 'react-bootstrap';
 import { useQuery, gql } from '@apollo/client';
 import { Link } from 'react-router-dom';
+import formatDate from '../util/formatDate';
 
 const GET_PATIENTS_COUNT = gql`
   query GetPatientsCount {
@@ -27,19 +28,6 @@ const Dashboard = () => {
   const patientCount = patientsData?.patientsData?.length || 0;
   const recentAlerts = alertsData?.emergencyAlerts?.slice(0, 5) || [];
 
-  // Format date for display
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    
-    try {
-      // Handle unix timestamp in milliseconds
-      const date = new Date(parseInt(dateString));
-      return date.toLocaleString();
-    } catch (error) {
-      console.error("Error formatting date:", error);
-      return dateString;
-    }
-  };
 
   return (
     <Container>

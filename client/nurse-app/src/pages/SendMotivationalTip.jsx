@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Container, Card, Form, Button, Alert } from 'react-bootstrap';
 import { useQuery, useMutation, gql } from '@apollo/client';
-
+import formatDate from '../util/formatDate';
 const GET_PATIENT = gql`
   query GetPatient($id: ID!) {
     patientDataByUserId(userId: $id) {
@@ -102,19 +102,6 @@ const SendMotivationalTip = () => {
   const loading = patientLoading || userLoading || tipsLoading;
   const tips = tipsData?.motivationalTips || [];
   
-  // Format date for display
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    
-    try {
-      // Handle unix timestamp in milliseconds
-      const date = new Date(parseInt(dateString));
-      return date.toLocaleString();
-    } catch (error) {
-      console.error("Error formatting date:", error);
-      return dateString;
-    }
-  };
 
 
   if (loading && !tips.length) {

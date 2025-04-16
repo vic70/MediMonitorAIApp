@@ -10,7 +10,6 @@ import DailyRecords from './pages/DailyRecords';
 import SymptomsList from './pages/SymptomsList';
 import MotivationalTips from './pages/MotivationalTips';
 import Profile from './pages/Profile';
-import Appointments from './pages/Appointments';
 import Navbar from './components/Navbar';
 
 const httpLink = createHttpLink({
@@ -101,7 +100,6 @@ function App() {
               <Route path="/symptoms" element={authenticated ? <SymptomsList /> : <Navigate to="/login" />} />
               <Route path="/motivational-tips" element={authenticated ? <MotivationalTips /> : <Navigate to="/login" />} />
               <Route path="/profile" element={authenticated ? <Profile /> : <Navigate to="/login" />} />
-              <Route path="/appointments" element={authenticated ? <Appointments /> : <Navigate to="/login" />} />
               <Route path="/login" element={<Navigate to="/" />} />
             </Routes>
           </div>
