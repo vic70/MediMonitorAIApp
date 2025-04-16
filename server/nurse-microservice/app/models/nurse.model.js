@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-
 const { Schema } = mongoose;
 
 // Daily Motivational Tip Schema
@@ -8,43 +7,28 @@ const MotivationalTipSchema = new Schema({
         type: String,
         required: true
     },
-    patientId: {
-        type: String,
+    // patient references the User model, meaning each patient is represented as a user
+    patient: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
         required: true
-    },
-    category: {
-        type: String,
-        default: 'General'
     },
     createdAt: {
         type: Date,
         default: Date.now
-    },
-    createdBy: {
-        id: String,
-        firstName: String,
-        lastName: String,
-        role: String
     }
 });
 
-// Nurse Data Schema - stores only nurse-specific data
-// Assumes user identity and role are managed by auth service
-const NurseDataSchema = new Schema({
-    userId: {
-        type: String,
+// Nurse Schema - Stores nurse-specific data with daily motivational tips
+const NurseSchema = new Schema({
+    // user references the User model so that the nurse is tied to a user record
+    user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
         required: true,
         unique: true
     },
     motivationalTips: [MotivationalTipSchema],
-    assignedPatients: [{
-        type: String,
-        ref: 'User'  // References userId in the User model from auth service
-    }],
-    specialization: {
-        type: String,
-        default: 'General'
-    },
     createdAt: {
         type: Date,
         default: Date.now
@@ -55,10 +39,10 @@ const NurseDataSchema = new Schema({
     }
 });
 
-// Middleware to update the 'updatedAt' field on save
-NurseDataSchema.pre('save', function (next) {
+// Middleware to update updatedAt field on every save
+NurseSchema.pre('save', function (next) {
     this.updatedAt = Date.now();
     next();
 });
 
-export default mongoose.model('NurseData', NurseDataSchema); 
+export default mongoose.model('Nurse', NurseSchema);

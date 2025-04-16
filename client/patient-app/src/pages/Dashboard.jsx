@@ -5,8 +5,9 @@ import { Link } from 'react-router-dom';
 
 const GET_PATIENT_DATA = gql`
   query GetPatientData($userId: ID!) {
-    patientByUserId(userId: $userId) {
+    patientDataByUserId(userId: $userId) {
       id
+      user
       dailyInfoRequired {
         pulseRate
         bloodPressure
@@ -17,11 +18,46 @@ const GET_PATIENT_DATA = gql`
       dailyRecords {
         id
         date
+        pulseRate
+        bloodPressure
+        weight
+        temperature
+        respiratoryRate
       }
-      emergencyAlerts {
-        id
-        createdAt
+      symptoms {
+        breathingProblem
+        fever
+        dryCough
+        soreThroat
+        runningNose
+        asthma
+        chronicLungDisease
+        headache
+        heartDisease
+        diabetes
+        hyperTension
+        fatigue
+        gastrointestinal
+        abroadTravel
+        contactWithCovidPatient
+        attendedLargeGathering
+        visitedPublicExposedPlaces
+        familyWorkingInPublicExposedPlaces
+        wearingMasks
+        sanitizationFromMarket
       }
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+const GET_EMERGENCY_ALERTS = gql`
+  query GetPatientEmergencyAlerts($patientId: ID!) {
+    patientEmergencyAlerts(patientId: $patientId) {
+      id
+      content
+      create_date
     }
   }
 `;
@@ -31,36 +67,81 @@ const GET_MOTIVATIONAL_TIPS = gql`
     motivationalTips(patientId: $patientId) {
       id
       content
-      createdAt
+      create_date
     }
   }
 `;
 
 const Dashboard = () => {
-  const userId = localStorage.getItem('userId');
+  const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const userId = storedUser.id;
   const [patientId, setPatientId] = useState(null);
   const [requiredInfo, setRequiredInfo] = useState({});
   
-  const { data: patientData, loading: patientLoading } = useQuery(GET_PATIENT_DATA, {
+  useEffect(() => {
+    if (!userId) {
+      console.error('No user ID found in localStorage');
+      // You might want to redirect to login here
+    }
+  }, [userId]);
+  
+  console.log('Dashboard rendering with userId:', userId);
+  
+  const { data: patientData, loading: patientLoading, error: patientError } = useQuery(GET_PATIENT_DATA, {
     variables: { userId },
-    skip: !userId
+    skip: !userId,
+    fetchPolicy: 'network-only',
+    onCompleted: (data) => {
+      console.log('Patient Data Query Completed:', data);
+      if (data?.patientDataByUserId) {
+        console.log('Setting patientId to:', data.patientDataByUserId.id);
+        setPatientId(data.patientDataByUserId.id);
+        setRequiredInfo(data.patientDataByUserId.dailyInfoRequired || {});
+      } else {
+        console.error('No patient data returned from query');
+      }
+    },
+    onError: (error) => {
+      console.error('Error fetching patient data:', error);
+      console.error('GraphQL Errors:', error.graphQLErrors);
+      console.error('Network Error:', error.networkError);
+      if (error.networkError?.result?.errors) {
+        console.error('Network Error Details:', error.networkError.result.errors);
+      }
+    }
   });
+
+  const { data: alertsData, loading: alertsLoading, error: alertsError } = useQuery(GET_EMERGENCY_ALERTS, {
+    variables: { patientId: userId || '' },
+    skip: !userId,
+    fetchPolicy: 'network-only',
+    onCompleted: (data) => {
+      console.log('Emergency Alerts Query Completed:', data);
+    },
+    onError: (error) => {
+      console.error('Error fetching emergency alerts:', error);
+    }
+  });
+
+  useEffect(() => {
+    if (patientId) {
+      console.log('PatientId updated:', patientId);
+    }
+  }, [patientId]);
+
+  console.log('Current patientData:', patientData);
+  console.log('Current alertsData:', alertsData);
+  console.log('Loading states:', { patientLoading, alertsLoading });
+  console.log('Error states:', { patientError, alertsError });
   
   const { data: tipsData, loading: tipsLoading } = useQuery(GET_MOTIVATIONAL_TIPS, {
     variables: { patientId },
     skip: !patientId
   });
   
-  useEffect(() => {
-    if (patientData?.patientByUserId) {
-      setPatientId(patientData.patientByUserId.id);
-      setRequiredInfo(patientData.patientByUserId.dailyInfoRequired || {});
-    }
-  }, [patientData]);
-  
   // Get most recent record date
-  const lastRecordDate = patientData?.patientByUserId?.dailyRecords?.length > 0 
-    ? new Date(patientData.patientByUserId.dailyRecords
+  const lastRecordDate = patientData?.patientDataByUserId?.dailyRecords?.length > 0 
+    ? new Date([...patientData.patientDataByUserId.dailyRecords]
         .sort((a, b) => new Date(b.date) - new Date(a.date))[0].date)
     : null;
   
@@ -70,10 +151,10 @@ const Dashboard = () => {
   const needsToRecordToday = !lastRecordDate || lastRecordDate < today;
   
   const recentTips = tipsData?.motivationalTips?.slice(0, 3) || [];
-  const alertsCount = patientData?.patientByUserId?.emergencyAlerts?.length || 0;
-  const recordsCount = patientData?.patientByUserId?.dailyRecords?.length || 0;
+  const alertsCount = alertsData?.patientEmergencyAlerts?.length || 0;
+  const recordsCount = patientData?.patientDataByUserId?.dailyRecords?.length || 0;
   
-  const loading = patientLoading || tipsLoading;
+  const loading = patientLoading || tipsLoading || alertsLoading;
 
   return (
     <Container>
@@ -99,7 +180,7 @@ const Dashboard = () => {
           )}
           
           <Row className="mb-4">
-            <Col md={4}>
+            <Col md={3}>
               <Card className="shadow-sm h-100 text-center">
                 <Card.Body>
                   <Card.Title>Health Records</Card.Title>
@@ -114,7 +195,7 @@ const Dashboard = () => {
               </Card>
             </Col>
             
-            <Col md={4}>
+            <Col md={3}>
               <Card className="shadow-sm h-100 text-center">
                 <Card.Body>
                   <Card.Title>Emergency Alerts</Card.Title>
@@ -129,7 +210,7 @@ const Dashboard = () => {
               </Card>
             </Col>
             
-            <Col md={4}>
+            <Col md={3}>
               <Card className="shadow-sm h-100 text-center">
                 <Card.Body>
                   <Card.Title>Symptoms Tracking</Card.Title>
@@ -139,6 +220,21 @@ const Dashboard = () => {
                   </Card.Text>
                   <Link to="/symptoms" className="btn btn-warning w-100">
                     Track Symptoms
+                  </Link>
+                </Card.Body>
+              </Card>
+            </Col>
+
+            <Col md={3}>
+              <Card className="shadow-sm h-100 text-center">
+                <Card.Body>
+                  <Card.Title>AI Health Analysis</Card.Title>
+                  <i className="bi bi-robot display-4 mb-3"></i>
+                  <Card.Text>
+                    Get AI-powered insights about your health trends
+                  </Card.Text>
+                  <Link to="/ai-analysis" className="btn btn-info w-100">
+                    View Analysis
                   </Link>
                 </Card.Body>
               </Card>
@@ -190,14 +286,14 @@ const Dashboard = () => {
                       {recentTips.map(tip => (
                         <Alert key={tip.id} variant="success" className="mb-2">
                           <small className="text-muted d-block mb-1">
-                            {new Date(tip.createdAt).toLocaleDateString()}
+                            {new Date(tip.create_date).toLocaleString()}
                           </small>
                           {tip.content}
                         </Alert>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-center my-4">No motivational tips received yet</p>
+                    <Alert variant="info">No motivational tips yet.</Alert>
                   )}
                 </Card.Body>
               </Card>

@@ -1,255 +1,213 @@
 import { useState, useEffect } from 'react';
 import { Container, Card, Form, Button, Alert, ListGroup, Badge } from 'react-bootstrap';
 import { useMutation, useQuery, gql } from '@apollo/client';
+import { jwtDecode } from 'jwt-decode';
 
-const GET_PATIENT_DATA = gql`
-  query GetPatientData($userId: ID!) {
-    patientByUserId(userId: $userId) {
-      id
-      symptoms {
-        id
-        date
-        symptoms
-        notes
-      }
+const GET_PATIENT_SYMPTOMS = gql`
+  query GetPatientSymptoms($patientId: ID!) {
+    patientSymptoms(patientId: $patientId) {
+      breathingProblem
+      fever
+      dryCough
+      soreThroat
+      runningNose
+      asthma
+      chronicLungDisease
+      headache
+      heartDisease
+      diabetes
+      hyperTension
+      fatigue
+      gastrointestinal
+      abroadTravel
+      contactWithCovidPatient
+      attendedLargeGathering
+      visitedPublicExposedPlaces
+      familyWorkingInPublicExposedPlaces
+      wearingMasks
+      sanitizationFromMarket
     }
   }
 `;
 
-const ADD_SYMPTOM_REPORT = gql`
-  mutation AddSymptomReport($patientId: ID!, $date: String!, $symptoms: [String!]!, $notes: String) {
-    addSymptomReport(patientId: $patientId, date: $date, symptoms: $symptoms, notes: $notes) {
-      id
-      date
-      symptoms
-      notes
+const ADD_SYMPTOM = gql`
+  mutation AddSymptom($symptoms: SymptomsInput!) {
+    addSymptom(symptoms: $symptoms) {
+      breathingProblem
+      fever
+      dryCough
+      soreThroat
+      runningNose
+      asthma
+      chronicLungDisease
+      headache
+      heartDisease
+      diabetes
+      hyperTension
+      fatigue
+      gastrointestinal
+      abroadTravel
+      contactWithCovidPatient
+      attendedLargeGathering
+      visitedPublicExposedPlaces
+      familyWorkingInPublicExposedPlaces
+      wearingMasks
+      sanitizationFromMarket
     }
   }
 `;
 
-// Common symptom options
-const SYMPTOM_OPTIONS = [
-  'Fever', 'Cough', 'Shortness of Breath', 'Fatigue', 'Headache',
-  'Sore Throat', 'Runny Nose', 'Muscle Pain', 'Nausea', 'Vomiting',
-  'Diarrhea', 'Loss of Taste', 'Loss of Smell', 'Chest Pain', 'Rash',
-  'Joint Pain', 'Difficulty Breathing', 'Swollen Lymph Nodes', 'Dizziness', 'Confusion'
-];
+// Mapping between display names and schema fields
+const SYMPTOM_MAPPING = {
+  'Shortness of Breath': 'breathingProblem',
+  'Fever': 'fever',
+  'Cough': 'dryCough',
+  'Sore Throat': 'soreThroat',
+  'Runny Nose': 'runningNose',
+  'Asthma': 'asthma',
+  'Chronic Lung Disease': 'chronicLungDisease',
+  'Headache': 'headache',
+  'Heart Disease': 'heartDisease',
+  'Diabetes': 'diabetes',
+  'Hypertension': 'hyperTension',
+  'Fatigue': 'fatigue',
+  'Gastrointestinal': 'gastrointestinal',
+  'Abroad Travel': 'abroadTravel',
+  'Contact with COVID Patient': 'contactWithCovidPatient',
+  'Attended Large Gathering': 'attendedLargeGathering',
+  'Visited Public Places': 'visitedPublicExposedPlaces',
+  'Family Working in Public Places': 'familyWorkingInPublicExposedPlaces',
+  'Wearing Masks': 'wearingMasks',
+  'Sanitization from Market': 'sanitizationFromMarket'
+};
+
+// Common symptoms (display names)
+const SYMPTOM_OPTIONS = Object.keys(SYMPTOM_MAPPING);
 
 const SymptomsList = () => {
-  const userId = localStorage.getItem('userId');
-  const [patientId, setPatientId] = useState(null);
   const [selectedSymptoms, setSelectedSymptoms] = useState([]);
-  const [customSymptom, setCustomSymptom] = useState('');
-  const [notes, setNotes] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  
-  const today = new Date().toISOString().split('T')[0];
-  const [date, setDate] = useState(today);
-  
-  const { data: patientData, loading: patientLoading, refetch } = useQuery(GET_PATIENT_DATA, {
-    variables: { userId },
+  const token = localStorage.getItem('authToken');
+  const decodedToken = token ? jwtDecode(token) : null;
+  const userId = decodedToken?.id;
+
+  const [addSymptom, { loading: submitting, error }] = useMutation(ADD_SYMPTOM);
+  const { data, loading, refetch } = useQuery(GET_PATIENT_SYMPTOMS, { 
+    variables: { patientId: userId },
+    fetchPolicy: 'cache-and-network',
     skip: !userId
   });
-  
-  const [addSymptomReport, { loading: submitting }] = useMutation(ADD_SYMPTOM_REPORT, {
-    onCompleted: () => {
-      setSuccessMessage('Symptoms reported successfully!');
-      setTimeout(() => setSuccessMessage(''), 3000);
-      // Reset form
-      setSelectedSymptoms([]);
-      setCustomSymptom('');
-      setNotes('');
-      setDate(today);
-      refetch();
-    },
-    onError: (error) => {
-      setErrorMessage(`Error reporting symptoms: ${error.message}`);
-      setTimeout(() => setErrorMessage(''), 5000);
-    }
-  });
-  
+
+  // Initialize selected symptoms from database data
   useEffect(() => {
-    if (patientData?.patientByUserId) {
-      setPatientId(patientData.patientByUserId.id);
-    }
-  }, [patientData]);
-  
-  const handleSymptomToggle = (symptom) => {
-    setSelectedSymptoms(prev => {
-      if (prev.includes(symptom)) {
-        return prev.filter(s => s !== symptom);
-      } else {
-        return [...prev, symptom];
-      }
-    });
-  };
-  
-  const handleAddCustomSymptom = () => {
-    if (customSymptom.trim() && !selectedSymptoms.includes(customSymptom.trim())) {
-      setSelectedSymptoms(prev => [...prev, customSymptom.trim()]);
-      setCustomSymptom('');
-    }
-  };
-  
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (selectedSymptoms.length === 0) {
-      setErrorMessage('Please select at least one symptom');
-      setTimeout(() => setErrorMessage(''), 3000);
-      return;
-    }
-    
-    try {
-      await addSymptomReport({
-        variables: {
-          patientId,
-          date,
-          symptoms: selectedSymptoms,
-          notes: notes.trim() || null
+    if (data?.patientSymptoms) {
+      const activeSymptoms = [];
+      
+      // Loop through the database symptoms and find active ones
+      Object.entries(data.patientSymptoms).forEach(([key, value]) => {
+        if (value === true) {  // If the symptom is true
+          // Find the display name for this database key by reversing the SYMPTOM_MAPPING
+          const displayName = Object.entries(SYMPTOM_MAPPING).find(([_, dbKey]) => dbKey === key)?.[0];
+          if (displayName) {
+            activeSymptoms.push(displayName);
+          }
         }
       });
+      
+      setSelectedSymptoms(activeSymptoms);
+    }
+  }, [data?.patientSymptoms]); // Only re-run when patientSymptoms changes
+
+  const handleSymptomToggle = async (symptom) => {
+    const updatedSymptoms = selectedSymptoms.includes(symptom)
+      ? selectedSymptoms.filter((s) => s !== symptom)
+      : [...selectedSymptoms, symptom];
+    
+    // Update local state immediately for better UX
+    setSelectedSymptoms(updatedSymptoms);
+
+    // Create symptoms input object with all symptoms initialized as false
+    const symptomsInput = {};
+    
+    // Initialize all symptoms as false first
+    Object.values(SYMPTOM_MAPPING).forEach(key => {
+      symptomsInput[key] = false;
+    });
+
+    // Set selected symptoms to true
+    updatedSymptoms.forEach(displayName => {
+      const dbKey = SYMPTOM_MAPPING[displayName];
+      if (dbKey) {
+        symptomsInput[dbKey] = true;
+      }
+    });
+
+    try {
+      const result = await addSymptom({ 
+        variables: { 
+          symptoms: symptomsInput
+        }
+      });
+      
+      // Verify the mutation was successful
+      if (result.data?.addSymptom) {
+        // Refetch to ensure we have the latest data
+        await refetch();
+      }
     } catch (error) {
-      console.error('Error reporting symptoms:', error);
+      console.error('Error updating symptoms:', error);
+      // Revert the local state if the mutation failed
+      setSelectedSymptoms(selectedSymptoms);
     }
   };
-  
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString();
-  };
-  
-  const symptomReports = patientData?.patientByUserId?.symptoms || [];
-  const sortedReports = [...symptomReports].sort((a, b) => new Date(b.date) - new Date(a.date));
 
   return (
     <Container>
-      <h1 className="mb-4">Symptom Tracker</h1>
-      
-      <Card className="shadow-sm mb-4">
+      <h2>Symptom Tracker</h2>
+      <Card className="mb-4">
         <Card.Body>
-          <Card.Title className="mb-3">Report Your Symptoms</Card.Title>
-          
-          {successMessage && <Alert variant="success">{successMessage}</Alert>}
-          {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
-          
-          <Form onSubmit={handleSubmit}>
-            <Form.Group className="mb-3">
-              <Form.Label>Date</Form.Label>
-              <Form.Control
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                max={today}
-                required
-              />
-            </Form.Group>
-            
-            <Form.Group className="mb-4">
-              <Form.Label>Select Your Symptoms</Form.Label>
-              <div className="d-flex flex-wrap gap-2 mb-3">
-                {SYMPTOM_OPTIONS.map(symptom => (
-                  <Badge 
+          {error && <Alert variant="danger">Error reporting symptoms: {error.message}</Alert>}
+          <Form>
+            <Form.Group>
+              <Form.Label>Select Symptoms</Form.Label>
+              <div className="d-flex flex-wrap gap-2">
+                {SYMPTOM_OPTIONS.map((symptom) => (
+                  <Badge
                     key={symptom}
                     bg={selectedSymptoms.includes(symptom) ? 'danger' : 'secondary'}
-                    style={{ cursor: 'pointer', padding: '8px 12px' }}
                     onClick={() => handleSymptomToggle(symptom)}
+                    style={{ cursor: 'pointer' }}
                   >
                     {symptom}
                   </Badge>
                 ))}
               </div>
-              
-              <div className="d-flex mb-2">
-                <Form.Control
-                  type="text"
-                  placeholder="Add other symptom"
-                  value={customSymptom}
-                  onChange={(e) => setCustomSymptom(e.target.value)}
-                />
-                <Button 
-                  variant="outline-primary" 
-                  onClick={handleAddCustomSymptom}
-                  disabled={!customSymptom.trim()}
-                  className="ms-2"
-                >
-                  Add
-                </Button>
-              </div>
-              
-              {selectedSymptoms.length > 0 && (
-                <div className="mt-3">
-                  <Form.Label>Selected Symptoms:</Form.Label>
-                  <div className="d-flex flex-wrap gap-2">
-                    {selectedSymptoms.map(symptom => (
-                      <Badge key={symptom} bg="danger" className="px-3 py-2">
-                        {symptom} <span onClick={() => handleSymptomToggle(symptom)} style={{ cursor: 'pointer', marginLeft: '5px' }}>×</span>
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
             </Form.Group>
-            
-            <Form.Group className="mb-4">
-              <Form.Label>Additional Notes</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={3}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Any additional information about your symptoms..."
-              />
-            </Form.Group>
-            
-            <div className="d-grid">
-              <Button 
-                variant="danger" 
-                size="lg" 
-                type="submit" 
-                disabled={submitting || !patientId || selectedSymptoms.length === 0}
-              >
-                {submitting ? 'Submitting...' : 'Report Symptoms'}
-              </Button>
-            </div>
           </Form>
         </Card.Body>
       </Card>
-      
-      <Card className="shadow-sm">
+
+      <Card>
         <Card.Body>
-          <Card.Title className="mb-3">Previous Symptom Reports</Card.Title>
-          
-          {patientLoading ? (
-            <p>Loading symptom reports...</p>
-          ) : sortedReports.length > 0 ? (
+          <Card.Title>Current Symptoms</Card.Title>
+          {loading ? (
+            <p>Loading...</p>
+          ) : selectedSymptoms.length > 0 ? (
             <ListGroup>
-              {sortedReports.map(report => (
-                <ListGroup.Item key={report.id} className="mb-2">
-                  <div className="d-flex justify-content-between align-items-center mb-2">
-                    <strong>Reported on: {formatDate(report.date)}</strong>
-                    <Badge bg="primary">{report.symptoms.length} symptoms</Badge>
-                  </div>
-                  
-                  <div className="d-flex flex-wrap gap-1 mb-2">
-                    {report.symptoms.map((symptom, index) => (
-                      <Badge key={index} bg="danger" className="me-1 mb-1">{symptom}</Badge>
-                    ))}
-                  </div>
-                  
-                  {report.notes && (
-                    <div className="mt-2">
-                      <small className="text-muted">Notes:</small>
-                      <p className="mb-0">{report.notes}</p>
-                    </div>
-                  )}
+              {selectedSymptoms.map((symptom) => (
+                <ListGroup.Item key={symptom} className="d-flex justify-content-between align-items-center">
+                  {symptom}
+                  <Badge 
+                    bg="danger" 
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => handleSymptomToggle(symptom)}
+                  >
+                    Remove
+                  </Badge>
                 </ListGroup.Item>
               ))}
             </ListGroup>
           ) : (
-            <Alert variant="info">
-              You haven't reported any symptoms yet.
-            </Alert>
+            <p>No symptoms selected.</p>
           )}
         </Card.Body>
       </Card>
@@ -257,4 +215,4 @@ const SymptomsList = () => {
   );
 };
 
-export default SymptomsList; 
+export default SymptomsList;

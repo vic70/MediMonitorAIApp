@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { Container, Card, Form, Button, Alert } from 'react-bootstrap';
 import { useQuery, useMutation, gql } from '@apollo/client';
 
 const GET_PATIENT = gql`
   query GetPatient($id: ID!) {
-    patient(id: $id) {
+    patientDataByUserId(userId: $id) {
       id
-      userId
+      user
       dailyInfoRequired {
         pulseRate
         bloodPressure
@@ -59,7 +59,6 @@ const UPDATE_REQUIRED_INFO = gql`
 
 const ManageRequiredInfo = () => {
   const { id } = useParams();
-  const navigate = useNavigate();
   
   const [formState, setFormState] = useState({
     pulseRate: false,
@@ -77,11 +76,11 @@ const ManageRequiredInfo = () => {
     skip: !id
   });
   
-  const patient = patientData?.patient;
+  const patient = patientData?.patientDataByUserId;
   
   const { data: userData, loading: userLoading } = useQuery(GET_USER, {
-    variables: { id: patient?.userId },
-    skip: !patient?.userId
+    variables: { id: patient?.user },
+    skip: !patient?.user
   });
   
   const [updateRequiredInfo, { loading: updateLoading }] = useMutation(UPDATE_REQUIRED_INFO, {

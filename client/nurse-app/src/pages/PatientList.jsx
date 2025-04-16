@@ -1,26 +1,13 @@
 import { useState } from 'react';
 import { Container, Table, Button, Badge, Form, InputGroup, Row, Col, Card } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import { useQuery, useMutation, gql } from '@apollo/client';
+import { useQuery, gql } from '@apollo/client';
 
-// Updated to use nurseData queries
-const GET_NURSE_DATA = gql`
-  query GetNurseData($userId: ID!) {
-    nurseData(userId: $userId) {
-      id
-      userId
-      assignedPatients
-    }
-  }
-`;
-
-// Updated to use patientData queries
 const GET_PATIENTS_DATA = gql`
   query GetPatientsData {
     patientsData {
       id
-      userId
-      createdAt
+      user
       dailyInfoRequired {
         pulseRate
         bloodPressure
@@ -28,6 +15,8 @@ const GET_PATIENTS_DATA = gql`
         temperature
         respiratoryRate
       }
+      createdAt
+      updatedAt
     }
   }
 `;
@@ -37,45 +26,14 @@ const GET_USERS = gql`
     users {
       id
       userName
-      firstName
-      lastName
       email
       role
     }
   }
 `;
 
-// Updated to use assignPatientToNurse without nurseId parameter
-const ASSIGN_PATIENT = gql`
-  mutation AssignPatientToNurse($patientId: ID!) {
-    assignPatientToNurse(patientId: $patientId) {
-      id
-      assignedPatients
-    }
-  }
-`;
-
-// New mutation to unassign a patient
-const UNASSIGN_PATIENT = gql`
-  mutation UnassignPatientFromNurse($patientId: ID!) {
-    unassignPatientFromNurse(patientId: $patientId) {
-      id
-      assignedPatients
-    }
-  }
-`;
-
 const PatientList = () => {
-  const userId = localStorage.getItem('userId');
   const [searchTerm, setSearchTerm] = useState('');
-  const [showOnlyAssigned, setShowOnlyAssigned] = useState(false);
-  
-  // Get nurse data to find assigned patients
-  const { data: nurseData, loading: nurseLoading, refetch: refetchNurse } = useQuery(GET_NURSE_DATA, {
-    variables: { userId },
-    skip: !userId,
-    fetchPolicy: 'network-only'
-  });
   
   // Get all patients
   const { data: patientsData, loading: patientsLoading } = useQuery(GET_PATIENTS_DATA, {
@@ -85,85 +43,38 @@ const PatientList = () => {
   // Get user data for all users
   const { data: usersData, loading: usersLoading } = useQuery(GET_USERS);
   
-  // Mutation to assign a patient to the nurse
-  const [assignPatient, { loading: assigning }] = useMutation(ASSIGN_PATIENT, {
-    onCompleted: () => {
-      refetchNurse();
-    },
-    onError: (error) => {
-      console.error('Error assigning patient:', error);
-    }
-  });
-  
-  // Mutation to unassign a patient from the nurse
-  const [unassignPatient, { loading: unassigning }] = useMutation(UNASSIGN_PATIENT, {
-    onCompleted: () => {
-      refetchNurse();
-    },
-    onError: (error) => {
-      console.error('Error unassigning patient:', error);
-    }
-  });
-  
-  // Handle assigning a patient
-  const handleAssign = (patientId) => {
-    assignPatient({
-      variables: { patientId }
-    });
-  };
-  
-  // Handle unassigning a patient
-  const handleUnassign = (patientId) => {
-    unassignPatient({
-      variables: { patientId }
-    });
-  };
-  
-  // Filter patients based on search term and assigned status
+  // Filter patients based on search term
   const getFilteredPatients = () => {
     if (!patientsData?.patientsData || !usersData?.users) return [];
     
-    const assignedPatientIds = nurseData?.nurseData?.assignedPatients || [];
-    
     return patientsData.patientsData
-      .filter(patientData => {
-        const user = usersData.users.find(u => u.id === patientData.userId);
+      .filter(patient => {
+        const user = usersData.users.find(u => u.id === patient.user);
         if (!user) return false;
-        
-        // Filter by assigned status if the option is enabled
-        if (showOnlyAssigned && !assignedPatientIds.includes(patientData.userId)) {
-          return false;
-        }
         
         // Filter by search term
         const searchLower = searchTerm.toLowerCase();
         return (
           user.userName.toLowerCase().includes(searchLower) || 
-          (user.firstName && user.firstName.toLowerCase().includes(searchLower)) ||
-          (user.lastName && user.lastName.toLowerCase().includes(searchLower)) ||
           user.email.toLowerCase().includes(searchLower)
         );
       })
-      .map(patientData => {
-        const user = usersData.users.find(u => u.id === patientData.userId);
+      .map(patient => {
+        const user = usersData.users.find(u => u.id === patient.user);
         return {
-          ...patientData,
+          ...patient,
           userName: user?.userName || 'Unknown',
-          firstName: user?.firstName || '',
-          lastName: user?.lastName || '',
-          fullName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown',
-          email: user?.email || '',
-          isAssigned: assignedPatientIds.includes(patientData.userId)
+          email: user?.email || ''
         };
       });
   };
   
   const filteredPatients = getFilteredPatients();
-  const isLoading = nurseLoading || patientsLoading || usersLoading;
+  const isLoading = patientsLoading || usersLoading;
   
   return (
     <Container>
-      <h2 className="mb-4">My Patients</h2>
+      <h2 className="mb-4">Patients</h2>
       
       <Card className="mb-4">
         <Card.Body>
@@ -185,15 +96,6 @@ const PatientList = () => {
                 )}
               </InputGroup>
             </Col>
-            <Col lg={6} className="mt-3 mt-lg-0 d-flex justify-content-lg-end">
-              <Form.Check
-                type="switch"
-                id="show-assigned"
-                label="Show only my patients"
-                checked={showOnlyAssigned}
-                onChange={(e) => setShowOnlyAssigned(e.target.checked)}
-              />
-            </Col>
           </Row>
         </Card.Body>
       </Card>
@@ -205,49 +107,40 @@ const PatientList = () => {
           <Table striped bordered hover>
             <thead>
               <tr>
-                <th>Name</th>
+                <th>Username</th>
                 <th>Email</th>
-                <th>Status</th>
+                <th>Required Daily Info</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredPatients.map(patient => (
                 <tr key={patient.id}>
-                  <td>{patient.fullName}</td>
+                  <td>{patient.userName}</td>
                   <td>{patient.email}</td>
                   <td>
-                    {patient.isAssigned ? (
-                      <Badge bg="success">Assigned to you</Badge>
-                    ) : (
-                      <Badge bg="secondary">Not assigned</Badge>
-                    )}
+                    <div className="d-flex flex-wrap gap-1">
+                      {patient.dailyInfoRequired.pulseRate && <Badge bg="info">Pulse Rate</Badge>}
+                      {patient.dailyInfoRequired.bloodPressure && <Badge bg="info">Blood Pressure</Badge>}
+                      {patient.dailyInfoRequired.weight && <Badge bg="info">Weight</Badge>}
+                      {patient.dailyInfoRequired.temperature && <Badge bg="info">Temperature</Badge>}
+                      {patient.dailyInfoRequired.respiratoryRate && <Badge bg="info">Respiratory Rate</Badge>}
+                    </div>
                   </td>
                   <td>
                     <div className="d-flex gap-2">
-                      <Link to={`/patients/${patient.userId}`}>
+                      <Link to={`/patients/${patient.user}`}>
                         <Button size="sm" variant="primary">View</Button>
                       </Link>
-                      
-                      {patient.isAssigned ? (
-                        <Button 
-                          size="sm" 
-                          variant="outline-danger"
-                          onClick={() => handleUnassign(patient.userId)}
-                          disabled={unassigning}
-                        >
-                          Unassign
-                        </Button>
-                      ) : (
-                        <Button 
-                          size="sm" 
-                          variant="outline-success"
-                          onClick={() => handleAssign(patient.userId)}
-                          disabled={assigning}
-                        >
-                          Assign
-                        </Button>
-                      )}
+                      <Link to={`/patients/${patient.user}/required-info`}>
+                        <Button size="sm" variant="outline-primary">Required Info</Button>
+                      </Link>
+                      <Link to={`/patients/${patient.user}/tips`}>
+                        <Button size="sm" variant="outline-success">Send Tip</Button>
+                      </Link>
+                      <Link to={`/patients/${patient.user}/conditions`}>
+                        <Button size="sm" variant="outline-warning">COVID Risk</Button>
+                      </Link>
                     </div>
                   </td>
                 </tr>
@@ -256,15 +149,11 @@ const PatientList = () => {
           </Table>
         </div>
       ) : (
-        <Card className="text-center p-4">
-          <Card.Body>
+        <Card>
+          <Card.Body className="text-center py-5">
             <Card.Title>No patients found</Card.Title>
             <Card.Text>
-              {searchTerm 
-                ? "No patients match your search criteria." 
-                : showOnlyAssigned 
-                  ? "You don't have any patients assigned to you yet." 
-                  : "There are no patients in the system yet."}
+              {searchTerm ? 'Try adjusting your search terms.' : 'There are no patients in the system yet.'}
             </Card.Text>
           </Card.Body>
         </Card>

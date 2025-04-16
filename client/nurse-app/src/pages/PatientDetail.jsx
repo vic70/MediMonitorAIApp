@@ -4,9 +4,9 @@ import { Container, Row, Col, Card, Table, Button, Badge, Tab, Tabs, Alert } fro
 
 const GET_PATIENT = gql`
   query GetPatient($id: ID!) {
-    patient(id: $id) {
+    patientDataByUserId(userId: $id) {
       id
-      userId
+      user
       dailyInfoRequired {
         pulseRate
         bloodPressure
@@ -23,16 +23,10 @@ const GET_PATIENT = gql`
         temperature
         respiratoryRate
       }
-      symptoms {
-        id
-        date
-        symptoms
-        notes
-      }
       emergencyAlerts {
         id
         content
-        createdAt
+        create_date
       }
       createdAt
       updatedAt
@@ -42,7 +36,7 @@ const GET_PATIENT = gql`
 
 const GET_USER = gql`
   query GetUser($id: ID!) {
-    user(id: $id) {
+    userById(id: $id) {
       id
       userName
       email
@@ -62,36 +56,56 @@ const GET_MOTIVATIONAL_TIPS = gql`
 
 const PatientDetail = () => {
   const { id } = useParams();
+
+  console.log(`id`, id);
   
   const { data: patientData, loading: patientLoading } = useQuery(GET_PATIENT, {
     variables: { id },
     skip: !id
   });
-  
-  const patient = patientData?.patient;
+
+  console.log(`patientData in console.log`, patientData);
+  const patient = patientData?.patientDataByUserId;
+  console.log(`patient in console.log`, patient);
+
   
   const { data: userData, loading: userLoading } = useQuery(GET_USER, {
-    variables: { id: patient?.userId },
-    skip: !patient?.userId
+    variables: { id: patient?.user },
+    skip: !patient?.user
   });
   
   const { data: tipsData, loading: tipsLoading } = useQuery(GET_MOTIVATIONAL_TIPS, {
     variables: { patientId: id },
     skip: !id
   });
-  
-  const user = userData?.user;
+
+
+  const user = userData?.userById;
+
+  console.log(`userData in console.log`, userData);
+  console.log('user', user)
+
+
   const tips = tipsData?.motivationalTips || [];
   const dailyRecords = patient?.dailyRecords || [];
-  const symptoms = patient?.symptoms || [];
   const emergencyAlerts = patient?.emergencyAlerts || [];
   
   const loading = patientLoading || userLoading || tipsLoading;
 
   // Helper function to format date
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString();
+    if (!dateString) return '';
+    
+    try {
+      // Handle unix timestamp in milliseconds
+      const date = new Date(parseInt(dateString));
+      return date.toLocaleString();
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return dateString;
+    }
   };
+
 
   if (loading) {
     return <Container><p>Loading patient data...</p></Container>;
@@ -174,7 +188,7 @@ const PatientDetail = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {dailyRecords.sort((a, b) => new Date(b.date) - new Date(a.date)).map(record => (
+                          {[...dailyRecords].sort((a, b) => new Date(b.date) - new Date(a.date)).map(record => (
                             <tr key={record.id}>
                               <td>{formatDate(record.date)}</td>
                               <td>{record.pulseRate || '-'}</td>
@@ -192,45 +206,14 @@ const PatientDetail = () => {
                   )}
                 </Tab>
                 
-                <Tab eventKey="symptoms" title="Symptoms">
-                  {symptoms.length > 0 ? (
-                    <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                      <Table striped hover responsive>
-                        <thead>
-                          <tr>
-                            <th>Date</th>
-                            <th>Symptoms</th>
-                            <th>Notes</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {symptoms.sort((a, b) => new Date(b.date) - new Date(a.date)).map(symptom => (
-                            <tr key={symptom.id}>
-                              <td>{formatDate(symptom.date)}</td>
-                              <td>
-                                {symptom.symptoms.map((s, i) => (
-                                  <Badge key={i} bg="danger" className="me-1 mb-1">{s}</Badge>
-                                ))}
-                              </td>
-                              <td>{symptom.notes || '-'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </Table>
-                    </div>
-                  ) : (
-                    <p className="text-center my-4">No symptoms reported</p>
-                  )}
-                </Tab>
-                
                 <Tab eventKey="alerts" title="Emergency Alerts">
                   {emergencyAlerts.length > 0 ? (
                     <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                      {emergencyAlerts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(alert => (
+                      {[...emergencyAlerts].sort((a, b) => new Date(b.create_date) - new Date(a.create_date)).map(alert => (
                         <Alert key={alert.id} variant="danger" className="mb-2">
                           <div className="d-flex justify-content-between">
                             <strong>Emergency Alert</strong>
-                            <small>{formatDate(alert.createdAt)}</small>
+                            <small>{formatDate(alert.create_date)}</small>
                           </div>
                           <hr />
                           <p>{alert.content}</p>
@@ -245,7 +228,7 @@ const PatientDetail = () => {
                 <Tab eventKey="tips" title="Motivational Tips">
                   {tips.length > 0 ? (
                     <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                      {tips.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(tip => (
+                      {[...tips].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(tip => (
                         <Card key={tip.id} className="mb-2">
                           <Card.Body>
                             <Card.Subtitle className="mb-2 text-muted">{formatDate(tip.createdAt)}</Card.Subtitle>

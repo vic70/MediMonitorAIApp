@@ -1,13 +1,11 @@
-import { useEffect, useState } from 'react';
 import { Card, Row, Col, Container, Alert } from 'react-bootstrap';
 import { useQuery, gql } from '@apollo/client';
 import { Link } from 'react-router-dom';
 
-const GET_NURSE_DATA = gql`
-  query GetNurseData($userId: ID!) {
-    nurseByUserId(userId: $userId) {
+const GET_PATIENTS_COUNT = gql`
+  query GetPatientsCount {
+    patientsData {
       id
-      patients
     }
   }
 `;
@@ -17,32 +15,31 @@ const GET_EMERGENCY_ALERTS = gql`
     emergencyAlerts {
       id
       content
-      createdAt
-      patientId
+      create_date
     }
   }
 `;
 
 const Dashboard = () => {
-  const userId = localStorage.getItem('userId');
-  const [nurseId, setNurseId] = useState(null);
-  const [patientCount, setPatientCount] = useState(0);
-  
-  const { data: nurseData } = useQuery(GET_NURSE_DATA, {
-    variables: { userId },
-    skip: !userId
-  });
-  
+  const { data: patientsData } = useQuery(GET_PATIENTS_COUNT);
   const { data: alertsData, loading } = useQuery(GET_EMERGENCY_ALERTS);
   
-  useEffect(() => {
-    if (nurseData?.nurseByUserId) {
-      setNurseId(nurseData.nurseByUserId.id);
-      setPatientCount(nurseData.nurseByUserId.patients?.length || 0);
-    }
-  }, [nurseData]);
-  
+  const patientCount = patientsData?.patientsData?.length || 0;
   const recentAlerts = alertsData?.emergencyAlerts?.slice(0, 5) || [];
+
+  // Format date for display
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    
+    try {
+      // Handle unix timestamp in milliseconds
+      const date = new Date(parseInt(dateString));
+      return date.toLocaleString();
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return dateString;
+    }
+  };
 
   return (
     <Container>
@@ -52,7 +49,7 @@ const Dashboard = () => {
         <Col md={4}>
           <Card className="shadow-sm h-100">
             <Card.Body>
-              <Card.Title>My Patients</Card.Title>
+              <Card.Title>Patients</Card.Title>
               <Card.Text className="display-4 text-center">
                 {patientCount}
               </Card.Text>
@@ -73,14 +70,14 @@ const Dashboard = () => {
                     recentAlerts.map(alert => (
                       <Alert key={alert.id} variant="danger" className="mb-2">
                         <small className="text-muted">
-                          {new Date(alert.createdAt).toLocaleString()}
+                          {formatDate(alert.create_date)}
                         </small>
                         <div>{alert.content}</div>
-                        <div className="mt-2">
+                        {/* <div className="mt-2">
                           <Link to={`/patients/${alert.patientId}`} className="btn btn-sm btn-outline-danger">
                             View Patient
                           </Link>
-                        </div>
+                        </div> */}
                       </Alert>
                     ))
                   ) : (
@@ -105,12 +102,12 @@ const Dashboard = () => {
                   </Link>
                 </Col>
                 <Col md={4}>
-                  <Link to={nurseId ? `/patients/${nurseId}/tips` : "#"} className={`btn btn-outline-success w-100 ${!nurseId && 'disabled'}`}>
+                  <Link to="/patients" className="btn btn-outline-success w-100">
                     Send Motivational Tips
                   </Link>
                 </Col>
                 <Col md={4}>
-                  <Link to={nurseId ? `/patients/${nurseId}/required-info` : "#"} className={`btn btn-outline-info w-100 ${!nurseId && 'disabled'}`}>
+                  <Link to="/patients" className="btn btn-outline-info w-100">
                     Update Required Information
                   </Link>
                 </Col>

@@ -1,160 +1,172 @@
 import { useState, useEffect } from 'react';
-import { Container, Card, Form, Button, Alert, ListGroup } from 'react-bootstrap';
 import { useMutation, useQuery, gql } from '@apollo/client';
+import { Form, Button, Alert, Table, Container, Card } from 'react-bootstrap';
 
 const GET_PATIENT_DATA = gql`
   query GetPatientData($userId: ID!) {
-    patientByUserId(userId: $userId) {
+    patientDataByUserId(userId: $userId) {
       id
-      emergencyAlerts {
-        id
-        content
-        createdAt
-      }
+      user
     }
   }
 `;
 
 const CREATE_EMERGENCY_ALERT = gql`
-  mutation CreateEmergencyAlert($patientId: ID!, $content: String!) {
-    createEmergencyAlert(patientId: $patientId, content: $content) {
+  mutation CreateEmergencyAlert($content: String!) {
+    createEmergencyAlert(content: $content) {
       id
       content
-      createdAt
+      create_date
+    }
+  }
+`;
+
+const GET_PATIENT_ALERTS = gql`
+  query GetPatientEmergencyAlerts($patientId: ID!) {
+    patientEmergencyAlerts(patientId: $patientId) {
+      id
+      content
+      create_date
     }
   }
 `;
 
 const EmergencyAlert = () => {
-  const userId = localStorage.getItem('userId');
+  const [content, setContent] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const userId = storedUser.id;
   const [patientId, setPatientId] = useState(null);
-  const [alertContent, setAlertContent] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  
-  const { data: patientData, loading: patientLoading, refetch } = useQuery(GET_PATIENT_DATA, {
+
+  // First, get the patient ID using the user ID
+  const { data: patientData, loading: patientLoading } = useQuery(GET_PATIENT_DATA, {
     variables: { userId },
-    skip: !userId
+    skip: !userId,
+    onCompleted: (data) => {
+      console.log('Patient Data Query Completed:', data);
+      console.log('user id', userId);
+      if (data?.patientDataByUserId?.id) {
+       console.log('Setting patientId to:', data.patientDataByUserId.id);
+        setPatientId(data.patientDataByUserId.id);
+      }
+    },
+    onError: (error) => {
+      console.error('Error fetching patient data:', error);
+    }
   });
   
-  const [createAlert, { loading: alertLoading }] = useMutation(CREATE_EMERGENCY_ALERT, {
-    onCompleted: () => {
-      setAlertContent('');
-      setSuccessMessage('Emergency alert sent successfully!');
-      setTimeout(() => setSuccessMessage(''), 3000);
+  const [createAlert, { loading: createLoading, error: createError }] = useMutation(CREATE_EMERGENCY_ALERT, {
+    onCompleted: (data) => {
+      console.log('Alert created:', data);
+      setSuccessMessage("Emergency alert has been sent to your nurse!");
+      setTimeout(() => setSuccessMessage(""), 5000);
       refetch();
     },
     onError: (error) => {
-      setErrorMessage(`Error sending alert: ${error.message}`);
-      setTimeout(() => setErrorMessage(''), 5000);
+      console.error('Error creating alert:', error);
     }
   });
-  
-  useEffect(() => {
-    if (patientData?.patientByUserId) {
-      setPatientId(patientData.patientByUserId.id);
+
+  const { data: alertsData, loading: alertsLoading, refetch, error: queryError } = useQuery(GET_PATIENT_ALERTS, {
+    variables: { patientId: userId || '' },
+    skip: !userId,
+    fetchPolicy: 'network-only',
+    onCompleted: (data) => {
+      console.log('Emergency Alerts Query Completed:', data);
+    },
+    onError: (error) => {
+      console.error('Error fetching emergency alerts:', error);
     }
-  }, [patientData]);
-  
-  const handleSubmit = async (e) => {
+  });
+
+  useEffect(() => {
+    console.log('Patient ID:', patientId);
+    console.log('Patient Data:', patientData);
+    console.log('Alerts Data:', alertsData);
+  }, [patientId, patientData, alertsData]);
+
+  const handleSubmit = (e) => {
     e.preventDefault();
-    
-    if (!alertContent.trim()) {
-      setErrorMessage('Please enter alert content');
-      setTimeout(() => setErrorMessage(''), 3000);
+    if (!patientId) {
+      console.error('No patient ID available');
       return;
     }
-    
-    try {
-      await createAlert({
-        variables: {
-          patientId,
-          content: alertContent
-        }
-      });
-    } catch (error) {
-      console.error('Error creating emergency alert:', error);
-    }
+    console.log('Creating alert with content:', content);
+    createAlert({
+      variables: {
+        content
+      }
+    });
+    setContent("");
   };
-  
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString();
-  };
-  
-  const alerts = patientData?.patientByUserId?.emergencyAlerts || [];
-  const sortedAlerts = [...alerts].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  const alerts = alertsData?.patientEmergencyAlerts ? [...alertsData.patientEmergencyAlerts] : [];
+  const loading = patientLoading || alertsLoading;
+
+  if (loading) {
+    return (
+      <Container>
+        <h1 className="mb-4">Emergency Alert</h1>
+        <p>Loading...</p>
+      </Container>
+    );
+  }
 
   return (
     <Container>
       <h1 className="mb-4">Emergency Alert</h1>
       
-      <Alert variant="danger" className="mb-4">
-        <Alert.Heading>IMPORTANT</Alert.Heading>
-        <p>
-          This feature is for non-life-threatening emergencies. If you are experiencing a 
-          medical emergency that requires immediate attention, please call emergency services
-          (911) immediately.
-        </p>
-      </Alert>
-      
-      <Card className="shadow-sm mb-4">
+      <Card className="mb-4 shadow-sm">
         <Card.Body>
           <Card.Title>Send Emergency Alert</Card.Title>
-          <Card.Text>
-            Use this form to send an emergency alert to your healthcare providers. They will 
-            be notified and can respond accordingly.
-          </Card.Text>
-          
           {successMessage && <Alert variant="success">{successMessage}</Alert>}
-          {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
-          
+          {createError && <Alert variant="danger">Error sending alert: {createError.message}</Alert>}
+          {queryError && <Alert variant="danger">Error loading alerts: {queryError.message}</Alert>}
+          {!patientId && <Alert variant="warning">Unable to load patient data. Please try refreshing the page.</Alert>}
           <Form onSubmit={handleSubmit}>
-            <Form.Group className="mb-3">
-              <Form.Label>Emergency Description</Form.Label>
+            <Form.Group controlId="emergencyContent" className="mb-3">
+              <Form.Label>Describe Your Emergency</Form.Label>
               <Form.Control
                 as="textarea"
-                rows={4}
-                value={alertContent}
-                onChange={(e) => setAlertContent(e.target.value)}
-                placeholder="Describe your emergency situation in detail..."
+                rows={3}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
                 required
+                placeholder="Please describe your emergency situation..."
+                disabled={!patientId}
               />
             </Form.Group>
-            
-            <div className="d-grid">
-              <Button 
-                variant="danger" 
-                size="lg" 
-                type="submit" 
-                disabled={alertLoading || !patientId}
-              >
-                {alertLoading ? 'Sending...' : 'SEND EMERGENCY ALERT'}
-              </Button>
-            </div>
+            <Button variant="danger" type="submit" disabled={createLoading || !patientId}>
+              {createLoading ? 'Sending...' : 'Send Alert'}
+            </Button>
           </Form>
         </Card.Body>
       </Card>
-      
+
       <Card className="shadow-sm">
         <Card.Body>
-          <Card.Title>Previous Alerts</Card.Title>
-          
-          {patientLoading ? (
+          <Card.Title>Your Emergency Alerts</Card.Title>
+          {alertsLoading ? (
             <p>Loading alerts...</p>
-          ) : sortedAlerts.length > 0 ? (
-            <ListGroup variant="flush">
-              {sortedAlerts.map(alert => (
-                <ListGroup.Item key={alert.id} className="border-bottom py-3">
-                  <div className="d-flex justify-content-between align-items-center mb-1">
-                    <strong>Emergency Alert</strong>
-                    <small className="text-muted">{formatDate(alert.createdAt)}</small>
-                  </div>
-                  <p className="mb-0">{alert.content}</p>
-                </ListGroup.Item>
-              ))}
-            </ListGroup>
+          ) : alerts.length > 0 ? (
+            <Table striped bordered hover responsive>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Content</th>
+                </tr>
+              </thead>
+              <tbody>
+                {alerts.sort((a, b) => new Date(b.create_date) - new Date(a.create_date)).map(alert => (
+                  <tr key={alert.id}>
+                    <td>{new Date(alert.create_date).toLocaleString()}</td>
+                    <td>{alert.content}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
           ) : (
-            <p className="text-center my-4">No previous emergency alerts</p>
+            <Alert variant="info">You haven't sent any emergency alerts yet.</Alert>
           )}
         </Card.Body>
       </Card>
@@ -162,4 +174,4 @@ const EmergencyAlert = () => {
   );
 };
 
-export default EmergencyAlert; 
+export default EmergencyAlert;

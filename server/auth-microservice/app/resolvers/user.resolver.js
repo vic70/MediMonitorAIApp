@@ -1,8 +1,31 @@
 import User from '../models/user.model.js';
 import config from '../../config/config.js';
 import jwt from 'jsonwebtoken';
+import axios from 'axios';
 
 const JWT_SECRET = config.jwtSecret;
+//TODO: need to change to environment variables
+const PATIENT_SERVICE_URL = 'http://localhost:4002/graphql';
+const NURSE_SERVICE_URL = 'http://localhost:4003/graphql';
+const patientMutation = `
+  mutation {
+    initializePatientData {
+      id
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+const nurseMutation = `
+  mutation {
+    initializeNurseData {
+      id
+      createdAt
+      updatedAt
+    }
+  }
+`;
 
 const userResolvers = {
     User: {
@@ -32,6 +55,29 @@ const userResolvers = {
             } catch (error) {
                 console.error(`[Auth Service] Error in user resolver:`, error);
                 return null;
+            }
+        },
+        userById: async (_, { id }, { req }) => {
+            // Get token from Authorization header
+            const authHeader = req.headers.authorization;
+            if (!authHeader || !authHeader.startsWith('Bearer ')) {
+                throw new Error('Authentication required');
+            }
+
+            const token = authHeader.split(' ')[1];
+
+            try {
+                const decoded = jwt.verify(token, JWT_SECRET);
+
+                // Only allow nurses to fetch any user, or users to fetch themselves
+                if (decoded.role !== 'NURSE' && decoded.id !== id) {
+                    throw new Error('Not authorized to access this user');
+                }
+
+                return await User.findById(id);
+            } catch (error) {
+                console.error(`[Auth Service] Error in userById resolver:`, error);
+                throw error;
             }
         },
         users: async (_, __, { req }) => {
@@ -73,7 +119,44 @@ const userResolvers = {
             }
 
             const newUser = new User({ userName, email, password, role });
-            return await newUser.save();
+            const savedUser = await newUser.save();
+
+            const token = jwt.sign({ id: savedUser.id, userName: savedUser.userName, role: savedUser.role }, JWT_SECRET, { expiresIn: '4h' });
+
+            // Call the external service to create a corresponding record.
+            if (savedUser.role === 'PATIENT') {
+                try {
+                    await axios.post(PATIENT_SERVICE_URL, {
+                        query: patientMutation,
+                        variables: {}
+                    }, {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error creating patient record:', error.response ? error.response.data : error.message);
+                    throw new Error('Failed to create patient record');
+                }
+            } else if (savedUser.role === 'NURSE') {
+                try {
+                    await axios.post(NURSE_SERVICE_URL, {
+                        query: nurseMutation,
+                        variables: {}
+                    }, {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error creating nurse record:', error.response ? error.response.data : error.message);
+                    throw new Error('Failed to create nurse record');
+                }
+            }
+
+            return savedUser;
         },
         login: async (_, { userName, password }, { res }) => {
             const user = await User.findOne({ userName });
