@@ -94,8 +94,18 @@ const PatientDetail = () => {
 
   // Helper function to format date
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString();
+    if (!dateString) return '';
+    
+    try {
+      // Handle unix timestamp in milliseconds
+      const date = new Date(parseInt(dateString));
+      return date.toLocaleString();
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return dateString;
+    }
   };
+
 
   if (loading) {
     return <Container><p>Loading patient data...</p></Container>;

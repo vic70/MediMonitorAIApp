@@ -16,7 +16,6 @@ const GET_EMERGENCY_ALERTS = gql`
       id
       content
       create_date
-      patientId
     }
   }
 `;
@@ -30,7 +29,16 @@ const Dashboard = () => {
 
   // Format date for display
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString();
+    if (!dateString) return '';
+    
+    try {
+      // Handle unix timestamp in milliseconds
+      const date = new Date(parseInt(dateString));
+      return date.toLocaleString();
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return dateString;
+    }
   };
 
   return (
@@ -65,11 +73,11 @@ const Dashboard = () => {
                           {formatDate(alert.create_date)}
                         </small>
                         <div>{alert.content}</div>
-                        <div className="mt-2">
+                        {/* <div className="mt-2">
                           <Link to={`/patients/${alert.patientId}`} className="btn btn-sm btn-outline-danger">
                             View Patient
                           </Link>
-                        </div>
+                        </div> */}
                       </Alert>
                     ))
                   ) : (
