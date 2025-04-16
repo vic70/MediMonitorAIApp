@@ -1,44 +1,149 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Container, Card, Form, Button, Alert, ListGroup, Badge } from 'react-bootstrap';
 import { useMutation, useQuery, gql } from '@apollo/client';
 
 const GET_PATIENT_SYMPTOMS = gql`
   query GetPatientSymptoms($patientId: ID!) {
-    symptomsByPatientId(patientId: $patientId) {
-      id
-      date
-      symptoms
-      notes
+    patientSymptoms(patientId: $patientId) {
+      breathingProblem
+      fever
+      dryCough
+      soreThroat
+      runningNose
+      asthma
+      chronicLungDisease
+      headache
+      heartDisease
+      diabetes
+      hyperTension
+      fatigue
+      gastrointestinal
+      abroadTravel
+      contactWithCovidPatient
+      attendedLargeGathering
+      visitedPublicExposedPlaces
+      familyWorkingInPublicExposedPlaces
+      wearingMasks
+      sanitizationFromMarket
     }
   }
 `;
 
-const REPORT_SYMPTOMS = gql`
-  mutation ReportSymptoms($patientId: ID!, $symptoms: [String]!, $notes: String) {
-    reportSymptoms(patientId: $patientId, symptoms: $symptoms, notes: $notes) {
-      id
+const ADD_SYMPTOM = gql`
+  mutation AddSymptom($symptoms: SymptomsInput!) {
+    addSymptom(symptoms: $symptoms) {
+      breathingProblem
+      fever
+      dryCough
+      soreThroat
+      runningNose
+      asthma
+      chronicLungDisease
+      headache
+      heartDisease
+      diabetes
+      hyperTension
+      fatigue
+      gastrointestinal
+      abroadTravel
+      contactWithCovidPatient
+      attendedLargeGathering
+      visitedPublicExposedPlaces
+      familyWorkingInPublicExposedPlaces
+      wearingMasks
+      sanitizationFromMarket
     }
   }
 `;
 
-// Common symptoms
-const SYMPTOM_OPTIONS = [
-  'Fever', 'Cough', 'Shortness of Breath', 'Fatigue', 'Headache',
-  'Sore Throat', 'Runny Nose', 'Muscle Pain', 'Nausea', 'Vomiting',
-  'Diarrhea', 'Loss of Taste', 'Loss of Smell', 'Chest Pain', 'Rash'
-];
+// Mapping between display names and schema fields
+const SYMPTOM_MAPPING = {
+  'Shortness of Breath': 'breathingProblem',
+  'Fever': 'fever',
+  'Cough': 'dryCough',
+  'Sore Throat': 'soreThroat',
+  'Runny Nose': 'runningNose',
+  'Asthma': 'asthma',
+  'Chronic Lung Disease': 'chronicLungDisease',
+  'Headache': 'headache',
+  'Heart Disease': 'heartDisease',
+  'Diabetes': 'diabetes',
+  'Hypertension': 'hyperTension',
+  'Fatigue': 'fatigue',
+  'Gastrointestinal': 'gastrointestinal',
+  'Abroad Travel': 'abroadTravel',
+  'Contact with COVID Patient': 'contactWithCovidPatient',
+  'Attended Large Gathering': 'attendedLargeGathering',
+  'Visited Public Places': 'visitedPublicExposedPlaces',
+  'Family Working in Public Places': 'familyWorkingInPublicExposedPlaces',
+  'Wearing Masks': 'wearingMasks',
+  'Sanitization from Market': 'sanitizationFromMarket'
+};
+
+// Common symptoms (display names)
+const SYMPTOM_OPTIONS = Object.keys(SYMPTOM_MAPPING);
 
 const SymptomsList = ({ patientId }) => {
   const [selectedSymptoms, setSelectedSymptoms] = useState([]);
-  const [notes, setNotes] = useState('');
   const [customSymptom, setCustomSymptom] = useState('');
-  const [reportSymptoms, { loading: submitting, error }] = useMutation(REPORT_SYMPTOMS);
-  const { data, loading } = useQuery(GET_PATIENT_SYMPTOMS, { variables: { patientId } });
+  const [addSymptom, { loading: submitting, error }] = useMutation(ADD_SYMPTOM);
+  const { data, loading, refetch } = useQuery(GET_PATIENT_SYMPTOMS, { 
+    variables: { patientId },
+    fetchPolicy: 'network-only'
+  });
 
-  const handleSymptomToggle = (symptom) => {
-    setSelectedSymptoms((prev) =>
-      prev.includes(symptom) ? prev.filter((s) => s !== symptom) : [...prev, symptom]
-    );
+  // Initialize selected symptoms from database data
+  useEffect(() => {
+    if (data?.patientSymptoms) {
+      const activeSymptoms = [];
+      
+      // Loop through the database symptoms
+      Object.entries(data.patientSymptoms).forEach(([key, value]) => {
+        if (value === true) {  // If the symptom is true
+          // Find the display name for this database key
+          const displayName = Object.entries(SYMPTOM_MAPPING).find(([_, dbKey]) => dbKey === key)?.[0];
+          if (displayName) {
+            activeSymptoms.push(displayName);
+          }
+        }
+      });
+      
+      setSelectedSymptoms(activeSymptoms);
+    }
+  }, [data]);
+
+  const handleSymptomToggle = async (symptom) => {
+    const updatedSymptoms = selectedSymptoms.includes(symptom)
+      ? selectedSymptoms.filter((s) => s !== symptom)
+      : [...selectedSymptoms, symptom];
+    
+    setSelectedSymptoms(updatedSymptoms);
+
+    // Create symptoms input object with all symptoms initialized as false
+    const symptomsInput = Object.values(SYMPTOM_MAPPING).reduce((acc, key) => {
+      acc[key] = false;
+      return acc;
+    }, {});
+
+    // Set selected symptoms to true
+    updatedSymptoms.forEach(displayName => {
+      const dbKey = SYMPTOM_MAPPING[displayName];
+      if (dbKey) {
+        symptomsInput[dbKey] = true;
+      }
+    });
+
+    try {
+      await addSymptom({ 
+        variables: { 
+          symptoms: symptomsInput
+        }
+      });
+      // Refetch to ensure we have the latest data
+      await refetch();
+    } catch (error) {
+      console.error('Error updating symptoms:', error);
+    }
   };
 
   const handleAddCustomSymptom = () => {
@@ -48,19 +153,13 @@ const SymptomsList = ({ patientId }) => {
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (selectedSymptoms.length === 0) return;
-    reportSymptoms({ variables: { patientId, symptoms: selectedSymptoms, notes } });
-  };
-
   return (
     <Container>
       <h2>Symptom Tracker</h2>
       <Card className="mb-4">
         <Card.Body>
           {error && <Alert variant="danger">Error reporting symptoms: {error.message}</Alert>}
-          <Form onSubmit={handleSubmit}>
+          <Form>
             <Form.Group>
               <Form.Label>Select Symptoms</Form.Label>
               <div className="d-flex flex-wrap gap-2">
@@ -90,40 +189,32 @@ const SymptomsList = ({ patientId }) => {
                 </Button>
               </div>
             </Form.Group>
-            <Form.Group className="mt-3">
-              <Form.Label>Notes</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={3}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Additional details..."
-              />
-            </Form.Group>
-            <Button variant="danger" type="submit" disabled={submitting}>
-              {submitting ? 'Reporting...' : 'Report Symptoms'}
-            </Button>
           </Form>
         </Card.Body>
       </Card>
 
       <Card>
         <Card.Body>
-          <Card.Title>Previous Reports</Card.Title>
+          <Card.Title>Current Symptoms</Card.Title>
           {loading ? (
             <p>Loading...</p>
-          ) : data?.symptomsByPatientId?.length > 0 ? (
+          ) : selectedSymptoms.length > 0 ? (
             <ListGroup>
-              {data.symptomsByPatientId.map((report) => (
-                <ListGroup.Item key={report.id}>
-                  <strong>{new Date(report.date).toLocaleDateString()}</strong>
-                  <p>Symptoms: {report.symptoms.join(', ')}</p>
-                  {report.notes && <p>Notes: {report.notes}</p>}
+              {selectedSymptoms.map((symptom) => (
+                <ListGroup.Item key={symptom} className="d-flex justify-content-between align-items-center">
+                  {symptom}
+                  <Badge 
+                    bg="danger" 
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => handleSymptomToggle(symptom)}
+                  >
+                    Remove
+                  </Badge>
                 </ListGroup.Item>
               ))}
             </ListGroup>
           ) : (
-            <p>No previous symptom reports.</p>
+            <p>No symptoms selected.</p>
           )}
         </Card.Body>
       </Card>

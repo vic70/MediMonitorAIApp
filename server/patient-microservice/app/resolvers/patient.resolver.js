@@ -255,6 +255,32 @@ const patientResolvers = {
             await patientData.save();
             return formatId(patientData);
         },
+
+        // [Patient] Report symptoms with notes
+        reportSymptoms: async (_, { patientId, symptoms, notes }, { user }) => {
+            ensureAuthenticated(user);
+            // Only allow if user is a nurse or the patient themselves
+            if (user.role !== 'NURSE' && user.id !== patientId) {
+                throw new GraphQLError('Not authorized to report symptoms for this patient');
+            }
+
+            let patientData = await PatientData.findOne({ user: patientId });
+            if (!patientData) {
+                patientData = new PatientData({ user: patientId });
+            }
+
+            // Create a new daily record with symptoms
+            const newRecord = {
+                date: new Date(),
+                symptoms: symptoms,
+                notes: notes
+            };
+
+            patientData.dailyRecords.push(newRecord);
+            await patientData.save();
+            
+            return formatId(patientData);
+        },
     }
 };
 
